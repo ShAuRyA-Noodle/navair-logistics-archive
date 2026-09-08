@@ -18,6 +18,14 @@ Updated 8 September 2026. The local core is implemented against the user's follo
 - [x] Run independent specification and quality/security review; resolve confirmed findings and add focused regression coverage.
 - [x] Verify database-backed tests, type checking, production compilation, and HTTP enquiry-to-delivery walkthrough.
 
+## Route experience correction
+
+- [x] Add a complete simple homepage with integrated first-time exporter enquiry.
+- [x] Add database-driven public route notices, alias lookup, and sparse/stale privacy safeguards.
+- [x] Add route-search forecasts, dated history/projection charts, accessible tables, and automatic confidence/timeline refresh.
+- [x] Expand to eight labelled demo routes and accepted demo journeys.
+- [x] Verify 60 tests, build, HTTP access boundaries, and browser interaction checks.
+
 ## Requires company records or live configuration
 
 - [ ] Obtain representative records and confirm route/service/equipment/commodity normalization, prices, units, and operational workflows.

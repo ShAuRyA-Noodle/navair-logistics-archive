@@ -26,7 +26,7 @@ To stop only this project's database:
 1. On Enquire, submit name, email, route, transport mode, and shipment details. Phone is optional. A successful response means the enquiry and email intentions are committed to the database.
 2. Sign in using **Navair Owner** from the clearly labelled local demo profiles. Select the enquiry, assign it if needed, set the customer selling rate, private buying rate, charge unit, quantity, and promised date, then accept it.
 3. Sign out and choose the matching demo customer profile. A newly submitted demo enquiry creates its customer profile automatically. Before acceptance the customer sees only a receipt/pending state. After acceptance they can open the journey, agreed customer price, forecast, and route conditions.
-4. Use **Rishi Jain** for an already accepted sample air shipment; use **Saurabh Mehta** for an enquiry awaiting acceptance. Operations and sales profiles demonstrate restricted staff access.
+4. Use **Rishi Jain** for accepted samples across eight routes; use **Saurabh Mehta** for an enquiry awaiting acceptance. Operations and sales profiles demonstrate restricted staff access.
 5. The owner can grant/revoke staff permissions and disable staff. Staff access depends on both permission and assignment. Owner accounts cannot be altered through the staff-permission editor.
 6. Update a shipment through its valid sequence. Actual delivery requires an actual date; the original promised date is retained. Delivery evidence is recorded by a database trigger and used in subsequent route summaries.
 
@@ -43,6 +43,12 @@ Demo profiles deliberately simulate identity for local review. They are not Goog
 - Route summaries from deduplicated shipment evidence: delays, early arrivals, unresolved overdue shipments, stale/insufficient information, and allowlisted issue categories.
 - Durable mail queue with preview mode, Resend adapter, stable send identifiers, retry/backoff, lease fencing, uncertain-send cutoff, raw signed webhook verification, deduplication and event reconciliation.
 - Validated owner-only imports with private buying costs, idempotent source IDs, atomic batches and an audit entry.
+
+## Route search and enquiry notices
+
+The homepage now introduces services and the enquiry process before the embedded first-time exporter form. Select origin, destination and service to see a dismissible route-condition notice based on stored records. The public endpoint only summarizes published routes. It excludes future evidence, suppresses detailed statistics below five relevant records or when observations are stale, and exposes no customer names, prices, or raw shipment records. Early arrivals describe past deliveries, not a promise of future performance.
+
+Open `/forecast`, sign in as Rishi Jain, search **Delhi → Bombay**, and choose the road route. Analyze it to see 40 weeks of synthetic recorded prices plus future projections. Timeline and confidence changes refresh the graph; currency/unit selection keeps price bases separate. The graph uses dated axes, point readouts, uncertainty ranges, and a collapsible history table. Real history is retained even when future projections cannot be calculated. Price forecasts remain restricted to accepted, authorized routes; the guest form only receives aggregate route conditions.
 
 ## Bring in business records
 
@@ -68,7 +74,7 @@ Example JSON shape (replace the route ID with an ID from `/api/routes`; the date
 }
 ```
 
-Supported initial modes: air, sea, road, courier, other; enquiries additionally accept unsure. Seeded routes are Delhi–Dubai, Mumbai–Jebel Ali, Delhi–Mumbai, and Bengaluru–Singapore. New routes can be created by accepting an enquiry. Comparability includes route, mode, unit and currency; real-world service/equipment/commodity normalization needs the actual dataset specification before operational forecast use.
+Supported initial modes: air, sea, road, courier, other; enquiries additionally accept unsure. Eight seeded routes span air, sea, road, and courier, including Delhi–Mumbai. Bombay resolves to Mumbai through the database alias catalog. New routes can be created by accepting an enquiry. Comparability includes route, mode, unit and currency; real-world service/equipment/commodity normalization needs the actual dataset specification before operational forecast use.
 
 ## Verification
 
@@ -80,7 +86,7 @@ npm run build
 npm run test:smoke
 ```
 
-Each `npm test` invocation creates a fresh temporary database, applies all migrations, runs the suite, and removes the database. It cannot process the application's email queue. The HTTP smoke walkthrough deliberately adds a labelled local demonstration customer/shipment to the running app.
+Use `npm test`, including for individual files; direct Vitest runs are blocked to protect demo records. Each invocation creates a fresh temporary database, applies all migrations, runs the suite, and removes the database. It cannot process the application's email queue. The HTTP smoke walkthrough deliberately adds a labelled local demonstration customer/shipment to the running app.
 
 Tests cover persistence, retry conflicts, acceptance gating, cross-customer access, private finance RLS, staff revocation, origin protection, forecast chronology/freshness and range behavior, radar deduplication/privacy, mail permission boundaries/leases/retries/webhooks, and import boundaries.
 

@@ -16,7 +16,7 @@ try{
  for(const file of readdirSync('db/migrations').filter(x=>x.endsWith('.sql')).sort())await admin.query(readFileSync(`db/migrations/${file}`,'utf8'));
  await admin.end();
  const code=await new Promise<number>((resolve,reject)=>{
-  const child=spawn(process.execPath,['node_modules/vitest/vitest.mjs','run',...process.argv.slice(2)],{stdio:'inherit',env:{...process.env,DATABASE_URL:appUrl.toString(),ADMIN_DATABASE_URL:adminUrl.toString(),LOCAL_DEMO_MODE:'true',MAIL_MODE:'preview'}});
+  const child=spawn(process.execPath,['node_modules/vitest/vitest.mjs','run',...process.argv.slice(2)],{stdio:'inherit',env:{...process.env,DATABASE_URL:appUrl.toString(),ADMIN_DATABASE_URL:adminUrl.toString(),NAVAIR_TEST_DATABASE:name,LOCAL_DEMO_MODE:'true',MAIL_MODE:'preview'}});
   child.on('error',reject);child.on('exit',code=>resolve(code??1));
  });
  process.exitCode=code;

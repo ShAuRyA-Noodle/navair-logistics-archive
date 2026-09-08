@@ -35,7 +35,8 @@ export type Enquiry = {
 };
 
 export type ShipmentMode = 'air' | 'sea' | 'road' | 'courier' | 'other' | 'unsure';
-export type Route = { id: string; origin: string; destination: string; mode: ShipmentMode; unit: string };
+export type RoutePriceSeries = { unit: string; currency: string };
+export type Route = { id: string; origin: string; destination: string; mode: ShipmentMode; unit: string; priceSeries?: RoutePriceSeries[] };
 
 export type Shipment = {
   id: string;

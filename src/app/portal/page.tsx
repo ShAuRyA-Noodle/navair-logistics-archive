@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api, errorMessage, formatDate, formatDateTime } from '@/components/api';
 import { Loading, Notice } from '@/components/notice';
+import { ForecastChart } from '@/components/forecast-chart';
+import { HistoricalPriceTable } from '@/components/forecast-analyzer';
 import type { Enquiry, Forecast, Journey, Pagination, Radar, Session } from '@/components/types';
 
 export default function PortalPage() {
@@ -59,19 +61,7 @@ function JourneyView({ journey, forecast, radar, weeks, confidence, onForecastCh
 }
 
 function ForecastView({ data }: { data: Forecast }) {
-  if (data.status !== 'available') return <div className="empty"><p>{data.reason ?? 'A forecast is not available for this route.'}</p><p className="muted">Historical evidence is shown only when there is enough comparable data. A forecast is never a price guarantee.</p></div>;
+  if (data.status !== 'available' && data.history.length === 0) return <div className="empty"><p>{data.reason ?? 'A forecast is not available for this route.'}</p><p className="muted">No comparable selling-price history is available yet.</p></div>;
   const qualifier = data.isDemo ? 'This is a synthetic experimental estimate' : 'This is an experimental estimate based on comparable historical selling prices';
-  return <><p className="muted">{data.label}. {qualifier}, not a binding quote or price guarantee.</p><ForecastChart data={data} /><div className="table-wrap"><table><caption className="sr-only">Forecast estimates and uncertainty ranges</caption><thead><tr><th>Week</th><th>Date</th><th>Estimate</th><th>{data.confidence}% range</th></tr></thead><tbody>{data.points.map((point) => <tr key={point.week}><td>{point.week}</td><td>{point.date}</td><td>{data.currency} {point.estimate.toLocaleString()} / {data.unit}</td><td>{data.currency} {point.lower.toLocaleString()}–{point.upper.toLocaleString()}</td></tr>)}</tbody></table></div><p className="muted">Data through {formatDate(data.dataThrough)}. {data.metrics.backtestCount > 0 ? `${data.metrics.backtestCount} holdout comparisons.` : 'No independent holdout comparison is available.'}</p></>;
-}
-
-function ForecastChart({ data }: { data: Forecast }) {
-  const points = [...data.history.map((item) => ({ ...item, kind: 'history' as const })), ...data.points.map((item) => ({ date: item.date, price: item.estimate, lower: item.lower, upper: item.upper, kind: 'forecast' as const }))];
-  if (points.length === 0) return null;
-  const values = points.flatMap((point) => point.kind === 'forecast' ? [point.lower, point.upper] : [point.price]);
-  const min = Math.min(...values); const max = Math.max(...values); const span = max - min || 1; const width = 640; const height = 220; const pad = 24;
-  const xy = (index: number, price: number) => ({ x: pad + index * ((width - pad * 2) / Math.max(1, points.length - 1)), y: height - pad - ((price - min) / span) * (height - pad * 2) });
-  const historyPath = data.history.map((item, index) => { const p = xy(index, item.price); return `${index === 0 ? 'M' : 'L'}${p.x},${p.y}`; }).join(' ');
-  const band = data.points.map((item, index) => xy(index + data.history.length, item.upper)).concat([...data.points].reverse().map((item, reverseIndex) => xy(data.history.length + data.points.length - 1 - reverseIndex, item.lower))).map((p, index) => `${index === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + ' Z';
-  const forecastLine = data.points.map((item, index) => { const p = xy(index + data.history.length, item.estimate); return `${index === 0 ? 'M' : 'L'}${p.x},${p.y}`; }).join(' ');
-  return <figure className="chart"><svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Selling-price history and ${data.weeks}-week forecast in ${data.currency} per ${data.unit}`}><line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} /><path d={band} className="forecast-band" /><path d={historyPath} className="history-line" /><path d={forecastLine} className="forecast-line" /></svg><figcaption><span className="legend history" />History <span className="legend forecast" />Forecast <span className="legend band" />{data.confidence}% range</figcaption></figure>;
+  return <><p className="muted">{data.status === 'available' ? `${data.label}. ${qualifier}, not a binding quote or price guarantee.` : `${data.reason ?? 'A future projection is not available.'} Observed selling-price history is shown below.`}</p><ForecastChart data={data} /><HistoricalPriceTable data={data} />{data.status === 'available' && <div className="table-wrap"><table><caption className="sr-only">Forecast estimates and uncertainty ranges</caption><thead><tr><th>Week</th><th>Date</th><th>Estimate</th><th>{data.confidence}% range</th></tr></thead><tbody>{data.points.map((point) => <tr key={point.week}><td>{point.week}</td><td>{point.date}</td><td>{data.currency} {point.estimate.toLocaleString()} / {data.unit}</td><td>{data.currency} {point.lower.toLocaleString()}–{point.upper.toLocaleString()}</td></tr>)}</tbody></table></div>}<p className="muted">Data through {formatDate(data.dataThrough)}. {data.metrics.backtestCount > 0 ? `${data.metrics.backtestCount} holdout comparisons.` : 'No independent holdout comparison is available.'}</p></>;
 }

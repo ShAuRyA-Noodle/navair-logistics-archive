@@ -20,6 +20,7 @@ export function Header() {
       <Link className="brand" href="/" aria-label="Navair logistics home">NAVAIR <span>LOGISTICS</span></Link>
       <nav aria-label="Main navigation">
         <Link href="/#enquire">Enquire</Link>
+        <Link href="/forecast">Forecast</Link>
         <Link href="/portal">My shipments</Link>
         {user && user.role !== 'customer' && <Link href="/admin">Workspace</Link>}
         {user ? <button className="nav-button" onClick={signOut} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button> : <Link className="nav-button" href="/login">Sign in</Link>}
