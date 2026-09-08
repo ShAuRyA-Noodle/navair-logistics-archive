@@ -6,6 +6,10 @@ if (!npmCli) throw new Error('npm_execpath is required to start the local servic
 const children: ChildProcess[] = [];
 let stopping = false;
 
+function hasExited(child: ChildProcess) {
+  return !child.pid || child.exitCode !== null || child.signalCode !== null;
+}
+
 function start(name: 'dev' | 'worker') {
   const child = spawn(process.execPath, [npmCli, 'run', name], {
     stdio: 'inherit',
@@ -23,10 +27,11 @@ function start(name: 'dev' | 'worker') {
 }
 
 function stop(child: ChildProcess, signal: NodeJS.Signals) {
-  if (!child.pid || child.exitCode !== null) return;
+  const pid = child.pid;
+  if (!pid || child.exitCode !== null || child.signalCode !== null) return;
   try {
     if (process.platform === 'win32') child.kill(signal);
-    else process.kill(-child.pid, signal);
+    else process.kill(-pid, signal);
   } catch { /* The child finished between the exit check and signal. */ }
 }
 
@@ -34,7 +39,7 @@ async function shutdown(exitCode: number) {
   if (stopping) return;
   stopping = true;
   const exited = Promise.all(children.map((child) => new Promise<void>((resolve) => {
-    if (child.exitCode !== null) resolve();
+    if (hasExited(child)) resolve();
     else {
       child.once('exit', () => resolve());
       child.once('error', () => resolve());
