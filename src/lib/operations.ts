@@ -4,11 +4,36 @@ import type { PoolClient } from 'pg';
 import { withActor } from './db';
 import { AppError } from './errors';
 import { PERMISSIONS } from './permissions';
+import { journeyPlan, nextStages, trackJourney, UPDATABLE_STATUSES, type LaneContext } from './lifecycle';
 
 const safeText = (min:number,max:number) => z.string().trim().min(min).max(max).refine(v=>!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v),'Unsupported control characters');
-export const enquirySchema = z.object({ name:safeText(2,100), email:z.email().max(254).transform(v=>v.toLowerCase()), phone:z.string().trim().max(30).default(''), origin:safeText(2,120), destination:safeText(2,120), mode:z.enum(['air','sea','road','courier','other','unsure']), description:safeText(10,2000) }).strict();
+const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}, 'Enter a valid calendar date.');
+const shipmentSchema = z.object({
+  cargoType:z.enum(['general_merchandise','food_beverage','textiles','electronics','machinery','automotive','chemicals','pharmaceuticals','perishables','samples','personal_effects','other','not_sure']),
+  goodsDescription:safeText(1,1000).optional(),
+  packageType:z.enum(['boxes','pallets','container','not_sure']),
+  quantity:z.number().int().positive().max(1_000_000).optional(),
+  handling:z.enum(['normal','dangerous','temperature_controlled','not_sure']).optional(),
+  weight:z.union([
+    z.object({value:z.number().finite().positive().max(10_000_000),unit:z.enum(['kg','lb'])}).strict(),
+    z.object({unknown:z.literal(true)}).strict(),
+  ]).optional(),
+  dimensions:z.union([
+    z.object({length:z.number().finite().positive().max(100_000),width:z.number().finite().positive().max(100_000),height:z.number().finite().positive().max(100_000),unit:z.enum(['cm','in'])}).strict(),
+    z.object({unknown:z.literal(true)}).strict(),
+  ]).optional(),
+  seaContainer:z.enum(['20ft','40ft','40highcube','not_sure']).optional(),
+  readiness:z.union([z.object({date:calendarDate}).strict(),z.object({flexible:z.literal(true)}).strict()]).optional(),
+  notes:safeText(1,1000).optional(),
+}).strict();
+export const enquirySchema = z.object({ name:safeText(2,100), email:z.email().max(254).transform(v=>v.toLowerCase()), phone:z.string().trim().max(30).default(''), origin:safeText(2,120), destination:safeText(2,120), mode:z.enum(['air','sea','road','courier','other','unsure']), description:safeText(10,2000), shipment:shipmentSchema.optional() }).strict().superRefine((value,ctx)=>{
+  if(value.shipment?.seaContainer&&value.mode!=='sea')ctx.addIssue({code:'custom',path:['shipment','seaContainer'],message:'Container selection is available for sea freight only.'});
+});
 const acceptSchema = z.object({sellingPrice:z.number().finite().min(0).max(1e10),buyingCost:z.number().finite().min(0).max(1e10),currency:z.string().regex(/^[A-Z]{3}$/),unit:safeText(1,40),quantity:z.number().finite().positive().max(1e7),promisedAt:z.iso.datetime({offset:true}),version:z.number().int().positive()}).strict();
-const eventSchema = z.object({status:z.enum(['booked','collected','in_transit','customs','delivered','cancelled']),estimatedAt:z.iso.datetime({offset:true}).optional(),actualAt:z.iso.datetime({offset:true}).optional(),note:safeText(3,500),version:z.number().int().positive()}).strict();
+const eventSchema = z.object({status:z.enum(UPDATABLE_STATUSES),estimatedAt:z.iso.datetime({offset:true}).optional(),actualAt:z.iso.datetime({offset:true}).optional(),note:safeText(3,500),version:z.number().int().positive()}).strict();
 export async function requirePermission(db:PoolClient, permission:string) {
   const result=await db.query('SELECT public.has_permission($1) AS allowed',[permission]);
   if(!result.rows[0].allowed) throw new AppError(403,'FORBIDDEN','You do not have access to this action.');
@@ -40,7 +65,7 @@ export async function listCasePage(actorId:string,input:unknown={}) {
 export async function caseDetail(actorId:string,id:string) {
   z.uuid().parse(id);
   return withActor(actorId,async db=>{
-    const row=(await db.query(`SELECT ${caseSelection},e.email,e.phone,e.description FROM enquiries e WHERE e.id=$1`,[id])).rows[0];
+    const row=(await db.query(`SELECT ${caseSelection},e.email,e.phone,e.description,e.shipment_details AS "shipmentDetails" FROM enquiries e WHERE e.id=$1`,[id])).rows[0];
     if(!row) throw new AppError(404,'NOT_FOUND','Enquiry not found.');
     return row;
   });
@@ -51,10 +76,20 @@ export async function getJourney(actorId:string,id:string) {
     const enquiry=(await db.query(`SELECT ${caseSelection} FROM enquiries e WHERE e.id=$1`,[id])).rows[0];
     if(!enquiry) throw new AppError(404,'NOT_FOUND','Enquiry not found.');
     if(enquiry.status!=='accepted') throw new AppError(403,'AWAITING_ACCEPTANCE','Your journey becomes available when Navair accepts your enquiry.');
-    const row=(await db.query(`SELECT id,route_id AS "routeId",status,promised_at AS "promisedAt",estimated_at AS "estimatedAt",actual_at AS "actualAt",selling_price AS "sellingPrice",currency,unit,quantity,version FROM shipments WHERE enquiry_id=$1`,[id])).rows[0];
+    const row=(await db.query(
+      `SELECT s.id,s.route_id AS "routeId",s.status,s.promised_at AS "promisedAt",s.estimated_at AS "estimatedAt",
+              s.actual_at AS "actualAt",s.selling_price AS "sellingPrice",s.currency,s.unit,s.quantity,s.version,
+              s.created_at AS "createdAt",r.transit_days AS "transitDays",r.cross_border AS "crossBorder",r.mode
+       FROM shipments s JOIN routes r ON r.id=s.route_id WHERE s.enquiry_id=$1`,[id])).rows[0];
     if(!row) throw new AppError(404,'NOT_FOUND','Shipment not found.');
     const events=(await db.query('SELECT id,status,description,occurred_at AS "occurredAt" FROM shipment_events WHERE shipment_id=$1 ORDER BY occurred_at,id',[row.id])).rows;
-    return {enquiry,shipment:{...row,sellingPrice:Number(row.sellingPrice),quantity:Number(row.quantity)},events};
+    const shipment={...row,sellingPrice:Number(row.sellingPrice),quantity:Number(row.quantity),transitDays:row.transitDays===null?null:Number(row.transitDays)};
+    const lane:LaneContext={mode:row.mode,transitDays:shipment.transitDays,crossBorder:row.crossBorder};
+    // The plan is stretched across the window the customer was actually promised, so the
+    // tracker can never show a schedule that disagrees with the agreed delivery date.
+    const plan=journeyPlan(lane,{kind:'between',start:row.createdAt,end:row.promisedAt});
+    const stages=trackJourney(plan,events,{cancelled:row.status==='cancelled'});
+    return {enquiry,shipment,events,stages};
   });
 }
 export async function acceptCase(actorId:string,id:string,input:unknown) {
@@ -75,15 +110,17 @@ export async function acceptCase(actorId:string,id:string,input:unknown) {
     return {id:shipment.id};
   });
 }
-const transitions:Record<string,string[]>={accepted:['booked','cancelled'],booked:['collected','cancelled'],collected:['in_transit','cancelled'],in_transit:['customs','delivered'],customs:['in_transit','delivered'],delivered:[],cancelled:[]};
 export async function updateShipment(actorId:string,id:string,input:unknown) {
   z.uuid().parse(id);const data=eventSchema.parse(input);
   return withActor(actorId,async db=>{
     await requirePermission(db,'shipments.update');
-    const shipment=(await db.query('SELECT * FROM shipments WHERE id=$1 FOR UPDATE',[id])).rows[0];
+    const shipment=(await db.query(
+      `SELECT s.*,r.mode,r.transit_days AS "transitDays",r.cross_border AS "crossBorder"
+       FROM shipments s JOIN routes r ON r.id=s.route_id WHERE s.id=$1 FOR UPDATE OF s`,[id])).rows[0];
     if(!shipment) throw new AppError(404,'NOT_FOUND','Shipment not found.');
     if(shipment.version!==data.version) throw new AppError(409,'CONFLICT','This shipment changed. Refresh before updating.');
-    if(!transitions[shipment.status]?.includes(data.status)) throw new AppError(409,'INVALID_TRANSITION',`Cannot move from ${shipment.status} to ${data.status}.`);
+    const lane:LaneContext={mode:shipment.mode,transitDays:shipment.transitDays,crossBorder:shipment.crossBorder};
+    if(!nextStages(shipment.status,lane).includes(data.status as never)) throw new AppError(409,'INVALID_TRANSITION',`Cannot move from ${shipment.status} to ${data.status}.`);
     if(data.status==='delivered'&&!data.actualAt) throw new AppError(422,'ACTUAL_DATE_REQUIRED','Actual delivery date is required.');
     if(data.actualAt && new Date(data.actualAt)>new Date()) throw new AppError(422,'FUTURE_ACTUAL_DATE','An actual delivery cannot be in the future.');
     await db.query('UPDATE shipments SET status=$2,estimated_at=coalesce($3,estimated_at),actual_at=$4,version=version+1 WHERE id=$1',[id,data.status,data.estimatedAt ?? null,data.status==='delivered'?data.actualAt:null]);

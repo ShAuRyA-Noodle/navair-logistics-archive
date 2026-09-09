@@ -35,7 +35,7 @@ export function EnquiryForm() {
       setReference(result.reference); setForm(blank); intent.current = { fingerprint: '', key: newKey() };
     } catch (reason) { setError(errorMessage(reason)); } finally { setLoading(false); }
   }
-  if (reference) return <section className="card confirmation" aria-labelledby="confirmation-title"><p className="eyebrow">Received</p><h2 id="confirmation-title">We received your enquiry.</h2><p>Reference <strong>{reference}</strong>. Our team will review the shipment details and follow up with you.</p><button onClick={() => setReference(null)}>Start another enquiry</button></section>;
+  if (reference) return <section className="card confirmation" aria-labelledby="confirmation-title"><p className="eyebrow">Received</p><h2 id="confirmation-title">We received your enquiry.</h2><p>Reference <strong>{reference}</strong>. Our team will review availability and shipment details, then follow up. This does not confirm service, a booking, or a quote.</p><button onClick={() => setReference(null)}>Start another enquiry</button></section>;
   return <form className="enquiry-form card" onSubmit={submit} noValidate>
     <div className="section-heading"><div><p className="eyebrow">First shipment enquiry</p><h2>Tell us where it needs to go.</h2></div><p>Start with the route, then add just enough detail for a considered reply. Fields marked * are required.</p></div>
     {error && <Notice>{error}</Notice>}

@@ -50,10 +50,26 @@ export type Shipment = {
   unit?: string;
   quantity?: number;
   version: number;
+  createdAt?: string;
+  transitDays?: number | null;
+  crossBorder?: boolean | null;
+  mode?: string;
+};
+
+export type TrackedStage = {
+  key: string;
+  label: string;
+  plain: string;
+  date: string;
+  dayOffset: number;
+  state: 'done' | 'current' | 'ahead';
+  happenedAt: string | null;
+  varianceDays: number | null;
+  note: string | null;
 };
 
 export type JourneyEvent = { id: string; status: string; description: string; occurredAt: string };
-export type Journey = { enquiry: Enquiry; shipment: Shipment; events: JourneyEvent[] };
+export type Journey = { enquiry: Enquiry; shipment: Shipment; events: JourneyEvent[]; stages: TrackedStage[] };
 export type Forecast = {
   status: 'available' | 'insufficient_data';
   isDemo: boolean;
@@ -86,3 +102,50 @@ export type Commitment = { id: string; enquiryId: string; assignedTo: string; ti
 export type MailMessage = { id: string; recipient: string; subject: string; body: string; kind: string; status: string; attempts: number; lastError: string | null; createdAt: string };
 export type Pagination = { page: number; pageSize: number; hasMore: boolean };
 export type Finance = { buyingCost: number; sellingPrice: number; margin: number; currency: string; unit: string; quantity: number };
+
+export type ServiceCoverage = 'supported' | 'on_request' | 'not_supported' | 'unknown';
+export type LaneMeta = { id: string; origin: string; destination: string; mode: string; unit: string; serviceCoverage: ServiceCoverage; distanceKm: number | null; transitDays: number | null; crossBorder: boolean | null };
+export type ItineraryLeg = { routeId: string; origin: string; destination: string; mode: string; unit: string; serviceCoverage: ServiceCoverage; transitDays: number | null; distanceKm: number | null; crossBorder: boolean | null };
+export type Itinerary = { legs: ItineraryLeg[]; transitDays: number | null; handoverDays: number; totalDays: number | null; needsDeskCheck: boolean; summary: string };
+export type RoutePlan = {
+  origin: string | null;
+  destination: string | null;
+  direct: ItineraryLeg[];
+  connecting: Itinerary[];
+  outcome: 'direct' | 'connecting' | 'same_city' | 'unknown_origin' | 'unknown_destination' | 'unknown_both' | 'no_service';
+  cities: { origins: string[]; destinations: string[] };
+};
+export type LaneForecast = {
+  status: 'available' | 'insufficient_data';
+  reason: string | null;
+  model: 'seasonal' | 'trend' | null;
+  currency: string;
+  unit: string;
+  confidence: 80 | 95;
+  weeks: number;
+  history: Array<{ date: string; price: number }>;
+  points: Array<{ week: number; date: string; estimate: number; lower: number; upper: number }>;
+  referencePrice: number | null;
+  changePercent: number | null;
+  seasonalNote: string | null;
+  metrics: { chosenMae: number | null; trendMae: number | null; seasonalMae: number | null; coverage: number | null; backtestCount: number; historyWeeks: number };
+  dataThrough: string | null;
+};
+export type LaneReliability = {
+  status: 'clear' | 'watch' | 'elevated' | 'insufficient_data';
+  headline: string;
+  detail: string;
+  recent: { days: number; deliveries: number; late: number; onTime: number; typicalDelayDays: number | null };
+  baseline: { days: number; deliveries: number; late: number; lateRate: number | null };
+  worseThanUsual: boolean;
+  issues: string[];
+  recentDays: Array<{ date: string; deliveries: number; late: number; delayDays: number | null }>;
+  dataThrough: string | null;
+};
+export type LaneAnalysis = {
+  lane: LaneMeta;
+  series: Array<{ unit: string; currency: string; weeks: number }>;
+  selected: { unit: string; currency: string; weeks: number } | null;
+  forecast: LaneForecast | null;
+  reliability: LaneReliability;
+};

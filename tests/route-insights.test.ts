@@ -4,11 +4,13 @@ import {Pool} from 'pg';
 import {withActor,pool} from '../src/lib/db';
 import {getPublicRouteConditions,getRouteForecast} from '../src/lib/route-insights';
 const admin=new Pool({connectionString:process.env.ADMIN_DATABASE_URL});
-const routeId=randomUUID(),privateId=randomUUID(),sparseId=randomUUID(),customer=randomUUID(),outsider=randomUUID(),enquiry=randomUUID();
+const routeId=randomUUID(),privateId=randomUUID(),sparseId=randomUUID(),suggestionId=randomUUID(),unsupportedId=randomUUID(),customer=randomUUID(),outsider=randomUUID(),enquiry=randomUUID();
 const tag=randomUUID().slice(0,8),origin=`Origin ${tag}`;
 const day=(n:number)=>new Date(Date.now()+n*86400000).toISOString();
 beforeAll(async()=>{
  for(const [id,destination,published] of [[routeId,'Mumbai',true],[privateId,`Private ${tag}`,false],[sparseId,`Sparse ${tag}`,true]])await admin.query('INSERT INTO routes(id,origin,destination,mode,unit,is_public) VALUES($1,$2,$3,$4,$5,$6)',[id,origin,destination,'road','shipment',published]);
+ await admin.query('INSERT INTO routes(id,origin,destination,mode,unit,is_public) VALUES($1,$2,$3,$4,$5,true)',[suggestionId,origin,'Goa','air','shipment']);
+ await admin.query("INSERT INTO routes(id,origin,destination,mode,unit,is_public,service_coverage) VALUES($1,$2,$3,'road','shipment',true,'not_supported')",[unsupportedId,origin,`Unsupported ${tag}`]);
  for(const id of [customer,outsider])await admin.query("INSERT INTO app_users(id,name,email,role,is_demo) VALUES($1,'Test customer',$2,'customer',true)",[id,`${id}@example.test`]);
  await admin.query("INSERT INTO enquiries(id,reference,customer_id,name,email,origin,destination,mode,description,status,is_demo) VALUES($1,$2,$3,'Test customer',$4,$5,'Mumbai','road','Test route shipment','accepted',true)",[enquiry,tag,customer,`${customer}@example.test`,origin]);
  await admin.query("INSERT INTO shipments(enquiry_id,route_id,promised_at,selling_price,currency,unit,quantity) VALUES($1,$2,$3,150,'INR','shipment',1)",[enquiry,routeId,day(4)]);
@@ -23,7 +25,24 @@ it('resolves case/whitespace and Bombay alias to published Mumbai route with rea
  expect(JSON.stringify(result)).not.toMatch(/source_id|customer|sellingPrice|buyingCost|private note/);
 });
 it('does not expose private, unknown or direction-reversed routes',async()=>{
- for(const input of [{origin,destination:`Private ${tag}`,mode:'road'},{origin,destination:'Unknown',mode:'road'},{origin:'Mumbai',destination:origin,mode:'road'}])expect(await getPublicRouteConditions(input)).toEqual({route:null,radar:null});
+ for(const input of [{origin,destination:`Private ${tag}`,mode:'road'},{origin,destination:'Unknown',mode:'road'},{origin:'Mumbai',destination:origin,mode:'road'}]){
+  const result=await getPublicRouteConditions(input);
+  expect(result).toMatchObject({route:null,radar:null});
+ }
+});
+it('classifies unavailable history without guessing an unknown city, and offers an explicit plausible choice',async()=>{
+ const unknown=await getPublicRouteConditions({origin,destination:'bhuwa',mode:'air'});
+ expect(unknown).toMatchObject({route:null,radar:null,match:'unknown_location',suggestions:{destination:[]}});
+ const suggestion=await getPublicRouteConditions({origin,destination:'go',mode:'air'});
+ expect(suggestion).toMatchObject({route:null,radar:null,match:'unknown_location',suggestions:{destination:['Goa']}});
+ const wrongService=await getPublicRouteConditions({origin,destination:'Mumbai',mode:'courier'});
+ expect(wrongService).toMatchObject({route:null,radar:null,match:'service_unavailable'});
+ const limited=await getPublicRouteConditions({origin,destination:`Sparse ${tag}`,mode:'road'});
+ expect(limited).toMatchObject({route:{id:sparseId},match:'no_history'});
+});
+it('only reports a route as not currently handled from the explicit coverage declaration',async()=>{
+ const result=await getPublicRouteConditions({origin,destination:`Unsupported ${tag}`,mode:'road'});
+ expect(result).toMatchObject({route:null,radar:null,match:'not_supported'});
 });
 it('suppresses detailed evidence below the public privacy threshold',async()=>{
  const {radar}=await getPublicRouteConditions({origin,destination:`Sparse ${tag}`,mode:'road'});

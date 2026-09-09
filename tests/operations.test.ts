@@ -2,7 +2,7 @@ import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
 import { config } from 'dotenv';
 import { randomUUID } from 'node:crypto';
-import { submitEnquiry, getJourney, acceptCase, updateShipment, updateMember, listCasePage } from '../src/lib/operations';
+import { submitEnquiry, getJourney, acceptCase, updateShipment, updateMember, listCasePage, enquirySchema } from '../src/lib/operations';
 import { withActor, pool } from '../src/lib/db';
 config({ path: '.env.local', quiet: true });
 const admin = new Pool({ connectionString: process.env.ADMIN_DATABASE_URL });
@@ -17,12 +17,76 @@ beforeAll(async () => {
 });
 afterAll(async () => { await admin.end(); await pool.end(); });
 describe('saved enquiry to accepted customer journey', () => {
+  it('persists structured first-time exporter details and includes them in both queued emails', async () => {
+    const shipment = {
+      cargoType: 'textiles', packageType: 'boxes', quantity: 5,
+      handling: 'normal', weight: { value: 120, unit: 'kg' },
+      dimensions: { length: 60, width: 40, height: 35, unit: 'cm' },
+      readiness: { date: '2026-10-01' }, goodsDescription: 'Cotton shirts',
+    };
+    const enquiry = await submitEnquiry({ ...data, email: `structured-${tag}@example.test`, shipment }, randomUUID());
+    const saved = await admin.query('SELECT shipment_details FROM enquiries WHERE id=$1', [enquiry.id]);
+    expect(saved.rows[0].shipment_details).toEqual(shipment);
+    const mail = await admin.query('SELECT body FROM email_outbox WHERE enquiry_id=$1 ORDER BY kind', [enquiry.id]);
+    expect(mail.rows.map((row) => row.body).join('\n')).toContain('Cargo type: textiles');
+    expect(mail.rows.map((row) => row.body).join('\n')).toContain('Total weight: 120 kg');
+  });
+
+  it('rejects an impossible shipment readiness date', async () => {
+    const result = enquirySchema.safeParse({
+      ...data, email: `invalid-date-${tag}@example.test`,
+      shipment: { cargoType: 'textiles', packageType: 'boxes', readiness: { date: '2026-02-30' } },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: ['shipment', 'readiness', 'date'], message: 'Enter a valid calendar date.' }),
+    ]));
+  });
+
+  it('accepts container selection only for sea freight', () => {
+    const result = enquirySchema.safeParse({ ...data, shipment: { cargoType: 'textiles', packageType: 'container', seaContainer: '20ft' } });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: ['shipment', 'seaContainer'] }),
+    ]));
+  });
+
   it('persists one enquiry and two mail jobs across retries', async () => {
     const key=randomUUID();
     const first=await submitEnquiry(data,key); enquiryId=first.id;
     expect(await submitEnquiry(data,key)).toEqual(first);
     const jobs=await admin.query('SELECT * FROM email_outbox WHERE enquiry_id=$1',[enquiryId]);
     expect(jobs.rowCount).toBe(2);
+  });
+  it('accepts an unlisted route for availability review and flags both queued emails', async () => {
+    const origin = `Unlisted origin ${tag}`;
+    const destination = `Unlisted destination ${tag}`;
+    const enquiry = await submitEnquiry({ ...data, email: `availability-${tag}@example.test`, origin, destination, mode: 'other' }, randomUUID());
+    const saved = await admin.query('SELECT origin,destination,mode,route_availability_review FROM enquiries WHERE id=$1', [enquiry.id]);
+    expect(saved.rows[0]).toMatchObject({ origin, destination, mode: 'other', route_availability_review: true });
+    const jobs = await admin.query('SELECT kind,subject,body FROM email_outbox WHERE enquiry_id=$1 ORDER BY kind', [enquiry.id]);
+    expect(jobs.rowCount).toBe(2);
+    const staff = jobs.rows.find((job) => job.kind === 'staff');
+    const acknowledgment = jobs.rows.find((job) => job.kind === 'acknowledgment');
+    expect(staff).toMatchObject({ subject: expect.stringContaining('Route availability review required') });
+    expect(staff.body).toContain('Route availability review required');
+    expect(acknowledgment.body).toContain('review availability and possible alternatives');
+    expect(acknowledgment.body).toContain('does not confirm a booking, quote, or availability');
+  });
+  it('keeps an explicitly supported route on the ordinary enquiry path', async () => {
+    const origin = `Supported origin ${tag}`;
+    const destination = `Supported destination ${tag}`;
+    await admin.query("INSERT INTO routes(origin,destination,mode,unit,service_coverage) VALUES($1,$2,'road','shipment','supported')", [origin, destination]);
+    const enquiry = await submitEnquiry({ ...data, email: `supported-${tag}@example.test`, origin, destination, mode: 'road' }, randomUUID());
+    const saved = await admin.query('SELECT route_availability_review FROM enquiries WHERE id=$1', [enquiry.id]);
+    expect(saved.rows[0].route_availability_review).toBe(false);
+    const jobs = await admin.query('SELECT kind,subject,body FROM email_outbox WHERE enquiry_id=$1 ORDER BY kind', [enquiry.id]);
+    const staff = jobs.rows.find((job) => job.kind === 'staff');
+    const acknowledgment = jobs.rows.find((job) => job.kind === 'acknowledgment');
+    expect(staff.subject).toContain('New export enquiry');
+    expect(staff.subject).not.toContain('Route availability review required');
+    expect(acknowledgment.body).toContain('review your requirements');
+    expect(acknowledgment.body).toContain('does not confirm a booking or price');
   });
   it('rejects idempotency key reuse with changed data', async () => {
     const key=randomUUID(); await submitEnquiry(data,key);

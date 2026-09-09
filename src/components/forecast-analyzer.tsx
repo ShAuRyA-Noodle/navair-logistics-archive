@@ -1,96 +1,185 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, errorMessage, formatDate, RequestError } from './api';
-import { ForecastChart } from './forecast-chart';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api, errorMessage } from './api';
+import { LaneCockpit } from './lane-cockpit';
 import { Loading, Notice } from './notice';
-import type { Forecast, Route, RoutePriceSeries } from './types';
+import type { Itinerary, ItineraryLeg, LaneAnalysis, RoutePlan } from './types';
+import './lane-cockpit.css';
 
-type RouteResponse = { routes: Route[]; aliases?: Record<string, string> };
+const MODE_WORDS: Record<string, string> = { air: 'Air', sea: 'Sea', road: 'Road', courier: 'Courier' };
+const AHEAD_CHOICES: Array<[number, string]> = [
+  [1, 'Next week'],
+  [2, 'In two weeks'],
+  [4, 'In a month'],
+  [6, 'In six weeks'],
+  [8, 'In two months'],
+];
 
-const normalize = (value: string) => value.trim().toLocaleLowerCase();
-
-function routeLabel(route: Route) { return `${route.origin} → ${route.destination} · ${route.mode}`; }
-
-function forecastError(reason: unknown) {
-  if (reason instanceof RequestError && /UNAUTH/i.test(reason.code)) {
-    return 'Sign in to access route forecasts. Insights are available after your shipment access has been accepted.';
-  }
-  return errorMessage(reason);
+function legLabel(leg: ItineraryLeg) {
+  const timing = leg.transitDays === null ? 'travel time not stated' : `about ${leg.transitDays} day${leg.transitDays === 1 ? '' : 's'}`;
+  return `${MODE_WORDS[leg.mode] ?? leg.mode} · ${timing}${leg.serviceCoverage === 'supported' ? '' : ' · needs a desk check'}`;
 }
 
 export function ForecastAnalyzer() {
-  const [routes, setRoutes] = useState<Route[]>([]);
-  const [aliases, setAliases] = useState<Record<string, string>>({});
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
-  const [selectedId, setSelectedId] = useState('');
-  const [seriesKey, setSeriesKey] = useState('');
-  const [weeks, setWeeks] = useState(8);
-  const [confidence, setConfidence] = useState<80 | 95>(80);
-  const [forecast, setForecast] = useState<Forecast | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [plan, setPlan] = useState<RoutePlan | null>(null);
+  const [planning, setPlanning] = useState(false);
+  const [selectedLaneId, setSelectedLaneId] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<LaneAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [weeks, setWeeks] = useState(4);
+  const [confidence, setConfidence] = useState<80 | 95>(80);
+  const [cities, setCities] = useState<{ origins: string[]; destinations: string[] }>({ origins: [], destinations: [] });
   const [error, setError] = useState<string | null>(null);
-  const request = useRef(0);
+  const planRequest = useRef(0);
+  const analysisRequest = useRef(0);
 
-  useEffect(() => { void (async () => { try { const result = await api<RouteResponse>('/api/routes'); setRoutes(result.routes); setAliases(result.aliases ?? {}); } catch (reason) { setError(forecastError(reason)); } finally { setLoading(false); } })(); }, []);
-  const candidates = useMemo(() => {
-    const resolvedOrigin = aliases[normalize(origin)] ?? origin;
-    const resolvedDestination = aliases[normalize(destination)] ?? destination;
-    return routes.filter((route) => (!resolvedOrigin || normalize(route.origin).includes(normalize(resolvedOrigin))) && (!resolvedDestination || normalize(route.destination).includes(normalize(resolvedDestination))));
-  }, [aliases, destination, origin, routes]);
-  const selected = routes.find((route) => route.id === selectedId) ?? candidates[0] ?? null;
-  const series = useMemo<RoutePriceSeries[]>(() => selected?.priceSeries?.length ? selected.priceSeries : selected ? [{ unit: selected.unit, currency: 'INR' }] : [], [selected]);
-  const selectedSeries = series.find((item) => `${item.unit}:${item.currency}` === seriesKey) ?? series[0] ?? null;
-  useEffect(() => { setSeriesKey(series[0] ? `${series[0].unit}:${series[0].currency}` : ''); }, [selected?.id, series]);
-  const aliasHint = useMemo(() => {
-    const input = [origin, destination].map(normalize).find((value) => aliases[value]);
-    return input ? `${input} is matched as ${aliases[input]}.` : null;
-  }, [aliases, destination, origin]);
+  useEffect(() => {
+    void api<RoutePlan>('/api/lanes/plan?origin=Mumbai&destination=Dubai')
+      .then((result) => setCities(result.cities))
+      .catch(() => undefined);
+  }, []);
 
-  function invalidateAnalysis() {
-    request.current += 1;
-    setForecast(null);
+  const runPlan = useCallback(async (from: string, to: string) => {
+    const current = planRequest.current + 1;
+    planRequest.current = current;
+    setPlanning(true);
     setError(null);
-    setAnalyzing(false);
-  }
-
-  async function analyze(nextWeeks=weeks,nextConfidence=confidence) {
-    if (!selected || !selectedSeries) { setError('Choose a source and destination with an available route before analyzing.'); return; }
-    const current = request.current + 1;
-    request.current = current;
-    setAnalyzing(true); setError(null); setForecast(null);
     try {
-      const parameters = new URLSearchParams({ weeks: String(nextWeeks), confidence: String(nextConfidence), unit: selectedSeries.unit, currency: selectedSeries.currency });
-      const result = await api<Forecast>(`/api/routes/${encodeURIComponent(selected.id)}/forecast?${parameters}`);
-      if (request.current === current) setForecast(result);
+      const result = await api<RoutePlan>(`/api/lanes/plan?origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}`);
+      if (planRequest.current !== current) return;
+      setPlan(result);
+      setCities(result.cities);
+      setSelectedLaneId(result.direct[0]?.routeId ?? result.connecting[0]?.legs[0]?.routeId ?? null);
     } catch (reason) {
-      if (request.current === current) setError(forecastError(reason));
-    } finally { if (request.current === current) setAnalyzing(false); }
-  }
+      if (planRequest.current === current) { setError(errorMessage(reason)); setPlan(null); }
+    } finally {
+      if (planRequest.current === current) setPlanning(false);
+    }
+  }, []);
 
-  if (loading) return <div className="page-shell"><Loading label="Loading available routes" /></div>;
+  useEffect(() => {
+    if (origin.trim().length < 2 || destination.trim().length < 2) { setPlan(null); setAnalysis(null); setSelectedLaneId(null); return; }
+    const timer = setTimeout(() => { void runPlan(origin.trim(), destination.trim()); }, 350);
+    return () => clearTimeout(timer);
+  }, [destination, origin, runPlan]);
+
+  useEffect(() => {
+    if (!selectedLaneId) { setAnalysis(null); return; }
+    const current = analysisRequest.current + 1;
+    analysisRequest.current = current;
+    setAnalyzing(true);
+    void api<LaneAnalysis>(`/api/lanes/${selectedLaneId}/analysis?weeks=${weeks}&confidence=${confidence}`)
+      .then((result) => { if (analysisRequest.current === current) { setAnalysis(result); setError(null); } })
+      .catch((reason) => { if (analysisRequest.current === current) { setError(errorMessage(reason)); setAnalysis(null); } })
+      .finally(() => { if (analysisRequest.current === current) setAnalyzing(false); });
+  }, [confidence, selectedLaneId, weeks]);
+
+  const laneChoices = useMemo(() => {
+    if (!plan) return [];
+    const fromItineraries = plan.connecting.flatMap((itinerary) => itinerary.legs);
+    const seen = new Set<string>();
+    return [...plan.direct, ...fromItineraries].filter((leg) => (seen.has(leg.routeId) ? false : seen.add(leg.routeId)));
+  }, [plan]);
+
+  const swap = () => { setOrigin(destination); setDestination(origin); };
+
   return <div className="page-shell forecast-shell">
-    <div className="page-title"><div><p className="eyebrow">Trend forecast analyzer</p><h1>Price trends for your route</h1></div><p>Compare observed selling prices with the next one to eight weeks of projected route pricing.</p></div>
+    <div className="page-title">
+      <div><p className="eyebrow">Trend forecast analyzer</p><h1>What will this route cost, and will it arrive on time?</h1></div>
+      <p>Type where your cargo starts and where it needs to go. Navair shows the price trend, the delivery record other customers are seeing right now, and a way around when there is no direct service.</p>
+    </div>
+
     {error && <Notice>{error}</Notice>}
-    <section className="card forecast-query" aria-labelledby="route-query-title"><div><p className="eyebrow">Select a route</p><h2 id="route-query-title">Source and destination</h2></div>
-      <div className="forecast-search-grid"><label>Source<input value={origin} onChange={(event) => { invalidateAnalysis(); setOrigin(event.target.value); setSelectedId(''); }} placeholder="e.g. Delhi" list="forecast-origins" /></label><label>Destination<input value={destination} onChange={(event) => { invalidateAnalysis(); setDestination(event.target.value); setSelectedId(''); }} placeholder="e.g. Bombay" list="forecast-destinations" /></label><datalist id="forecast-origins">{routes.map((route) => <option key={route.id} value={route.origin} />)}</datalist><datalist id="forecast-destinations">{routes.map((route) => <option key={route.id} value={route.destination} />)}</datalist></div>
-      {aliasHint && <p className="forecast-alias" role="status">Route alias: {aliasHint}</p>}
-      <div className="forecast-control-grid"><label>Matching route<select value={selected?.id ?? ''} onChange={(event) => { invalidateAnalysis(); setSelectedId(event.target.value); }} disabled={candidates.length === 0}><option value="">{candidates.length ? 'Choose a route' : 'No matching routes'}</option>{candidates.map((route) => <option value={route.id} key={route.id}>{routeLabel(route)}</option>)}</select></label><label>Price unit<select value={selectedSeries ? `${selectedSeries.unit}:${selectedSeries.currency}` : ''} onChange={(event) => { invalidateAnalysis(); setSeriesKey(event.target.value); }} disabled={!selectedSeries}>{series.map((item) => <option value={`${item.unit}:${item.currency}`} key={`${item.unit}:${item.currency}`}>{item.currency} / {item.unit}</option>)}</select></label><label>Timeline<select value={weeks} onChange={(event) => { const next=Number(event.target.value); const refresh=Boolean(forecast)||analyzing; invalidateAnalysis(); setWeeks(next); if(refresh) void analyze(next,confidence); }}>{Array.from({ length: 8 }, (_, index) => index + 1).map((week) => <option value={week} key={week}>{week} week{week === 1 ? '' : 's'}</option>)}</select></label><label>Forecast confidence<select value={confidence} onChange={(event) => { const next=Number(event.target.value) as 80|95; const refresh=Boolean(forecast)||analyzing; invalidateAnalysis(); setConfidence(next); if(refresh) void analyze(weeks,next); }}><option value={80}>80%</option><option value={95}>95%</option></select></label><button type="button" onClick={() => void analyze()} disabled={!selected || !selectedSeries || analyzing}>{analyzing ? 'Analyzing route…' : 'Analyze route'}</button></div>
-      {selected && <p className="forecast-selection">Selected route: <strong>{routeLabel(selected)}</strong>{selectedSeries ? <> · Comparing <strong>{selectedSeries.currency} / {selectedSeries.unit}</strong></> : ' · Comparable series require authorized route access.'}</p>}
+
+    <section className="card lane-search" aria-labelledby="lane-search-title">
+      <div><p className="eyebrow">Step 1</p><h2 id="lane-search-title">Pick your route</h2></div>
+      <div className="lane-search-grid">
+        <label>From
+          <input value={origin} onChange={(event) => setOrigin(event.target.value)} list="lane-origins" placeholder="Jaipur" autoComplete="off" />
+        </label>
+        <button type="button" className="lane-swap" onClick={swap} disabled={!origin && !destination} aria-label="Swap origin and destination">⇄</button>
+        <label>To
+          <input value={destination} onChange={(event) => setDestination(event.target.value)} list="lane-destinations" placeholder="Bangkok" autoComplete="off" />
+        </label>
+        <datalist id="lane-origins">{cities.origins.map((city) => <option key={city} value={city} />)}</datalist>
+        <datalist id="lane-destinations">{cities.destinations.map((city) => <option key={city} value={city} />)}</datalist>
+      </div>
+      {planning && <Loading label="Looking for services on this route" />}
+
+      {plan?.outcome === 'same_city' && <Notice tone="info">Origin and destination are the same city. Change one of them to see a route.</Notice>}
+      {plan && (plan.outcome === 'unknown_origin' || plan.outcome === 'unknown_destination' || plan.outcome === 'unknown_both') && <div className="lane-unknown">
+        <p><strong>Navair does not have {plan.outcome === 'unknown_destination' ? 'that destination' : plan.outcome === 'unknown_origin' ? 'that origin' : 'either of those cities'} in its network yet.</strong> Pick one of these instead, or send an enquiry and the desk will look into it.</p>
+        <div className="lane-city-suggestions">
+          {(plan.outcome === 'unknown_destination' ? plan.cities.destinations : plan.cities.origins).slice(0, 14).map((city) => (
+            <button type="button" key={city} onClick={() => (plan.outcome === 'unknown_destination' ? setDestination(city) : setOrigin(city))}>{city}</button>
+          ))}
+        </div>
+      </div>}
+      {plan?.outcome === 'no_service' && <Notice tone="info">
+        Navair has no direct service and no connecting service between {plan.origin} and {plan.destination} at the moment. Send an enquiry and the desk will price it manually.
+      </Notice>}
+
+      {plan && plan.direct.length > 0 && <div className="lane-options">
+        <p className="eyebrow">Direct services</p>
+        <p className="lane-options-lead">Pick how you want it sent. The days shown are how long the cargo spends travelling, once it is collected.</p>
+        <div className="lane-option-row">
+          {plan.direct.map((leg) => <button type="button" key={leg.routeId}
+            className={leg.routeId === selectedLaneId ? 'lane-option lane-option-active' : 'lane-option'}
+            aria-pressed={leg.routeId === selectedLaneId}
+            onClick={() => setSelectedLaneId(leg.routeId)}>
+            <strong>{MODE_WORDS[leg.mode] ?? leg.mode}</strong>
+            <span>{leg.transitDays === null ? 'travel time not stated' : `about ${leg.transitDays} day${leg.transitDays === 1 ? '' : 's'} travelling`}</span>
+            {leg.serviceCoverage !== 'supported' && <span className="lane-option-flag">on request</span>}
+          </button>)}
+        </div>
+      </div>}
+
+      {plan && plan.connecting.length > 0 && <div className="lane-itineraries">
+        <p className="eyebrow">{plan.direct.length > 0 ? 'Other ways to get there' : 'No direct service — here is a way around'}</p>
+        {plan.connecting.map((itinerary: Itinerary) => <article key={itinerary.summary} className="lane-itinerary">
+          <ol className="lane-itinerary-legs">
+            {itinerary.legs.map((leg, index) => <li key={leg.routeId}>
+              <span className="lane-itinerary-step">{index + 1}</span>
+              <button type="button" className={leg.routeId === selectedLaneId ? 'lane-leg lane-leg-active' : 'lane-leg'} onClick={() => setSelectedLaneId(leg.routeId)}>
+                {leg.origin} → {leg.destination}
+                <small>{legLabel(leg)}</small>
+              </button>
+            </li>)}
+          </ol>
+          <p className="lane-itinerary-note">
+            {itinerary.totalDays === null
+              ? `${itinerary.legs.length} legs. Total transit time is not stated for every leg, so the desk confirms it.`
+              : `About ${itinerary.totalDays} days door to door, including ${itinerary.handoverDays} day${itinerary.handoverDays === 1 ? '' : 's'} to transfer between services.`}
+            {itinerary.needsDeskCheck && ' One leg is on request, so Navair confirms space before quoting.'}
+            {' Each leg is priced in its own unit, so click a leg to study it.'}
+          </p>
+        </article>)}
+      </div>}
     </section>
-    {analyzing && <Loading label="Analyzing route history and projection" />}
-    {forecast && <ForecastResults data={forecast} />}
+
+    {laneChoices.length > 0 && <section className="card lane-controls" aria-labelledby="lane-controls-title">
+      <div><p className="eyebrow">Step 2</p><h2 id="lane-controls-title">When are you shipping?</h2>
+        <p className="lane-controls-lead">We will show you what the price is likely to be around then.</p></div>
+      <div className="lane-controls-row">
+        <label>I am shipping
+          <select value={weeks} onChange={(event) => setWeeks(Number(event.target.value))}>
+            {AHEAD_CHOICES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label>How safe should the price range be?
+          <select value={confidence} onChange={(event) => setConfidence(Number(event.target.value) as 80 | 95)}>
+            <option value={80}>Normal — right about 8 times out of 10</option>
+            <option value={95}>Extra safe — right about 19 times out of 20</option>
+          </select>
+        </label>
+        <p className="lane-controls-note">Picking &ldquo;extra safe&rdquo; only makes the price range wider so fewer surprises fall outside it. The expected price stays the same either way.</p>
+      </div>
+    </section>}
+
+    {analyzing && !analysis && <Loading label="Reading this lane's history" />}
+    {analysis && <section className="card lane-result">{<LaneCockpit analysis={analysis} />}</section>}
   </div>;
-}
-
-export function ForecastResults({ data }: { data: Forecast }) {
-  if (data.status !== 'available' && data.history.length === 0) return <section className="card"><div className="empty"><p>{data.reason ?? 'A forecast is not available for this route.'}</p><p className="muted">No comparable selling-price history is available for this route yet.</p></div></section>;
-  return <section className="card forecast-results"><div className="section-heading"><div><p className="eyebrow">Route outlook</p><h2>History and future projection</h2><p>{data.isDemo ? 'Synthetic demo data · experimental estimates' : 'Historical customer prices · experimental estimates'}</p></div><p className="forecast-data-through">Data through {formatDate(data.dataThrough)}</p></div>{data.status === 'available' ? <p className="muted">Observed history is shown as a solid line. The dashed projection and shaded range show the next {data.weeks} weeks at {data.confidence}% confidence.</p> : <p className="muted">{data.reason ?? 'There is not enough comparable data for a future projection.'} The observed price history remains available below.</p>}<ForecastChart data={data} /><p className="muted">The confidence level changes the uncertainty range, not the central price estimate. Projections are estimates, not a confirmed quote.</p><HistoricalPriceTable data={data} />{data.status === 'available' && <div className="table-wrap"><table><caption>Projected route prices</caption><thead><tr><th scope="col">Week</th><th scope="col">Date</th><th scope="col">Projected price</th><th scope="col">{data.confidence}% range</th></tr></thead><tbody>{data.points.map((point) => <tr key={`${point.week}-${point.date}`}><th scope="row">{point.week}</th><td>{formatDate(point.date)}</td><td>{data.currency} {point.estimate.toLocaleString()} / {data.unit}</td><td>{data.currency} {point.lower.toLocaleString()}–{point.upper.toLocaleString()} / {data.unit}</td></tr>)}</tbody></table></div>}</section>;
-}
-
-export function HistoricalPriceTable({ data }: { data: Forecast }) {
-  if (data.history.length === 0) return null;
-  return <details className="forecast-history-details"><summary>View {data.history.length} weeks of recorded prices</summary><div className="table-wrap"><table><caption>Observed selling-price history</caption><thead><tr><th scope="col">Date</th><th scope="col">Observed selling price</th></tr></thead><tbody>{data.history.map((item) => <tr key={item.date}><th scope="row">{formatDate(item.date)}</th><td>{data.currency} {item.price.toLocaleString()} / {data.unit}</td></tr>)}</tbody></table></div></details>;
 }

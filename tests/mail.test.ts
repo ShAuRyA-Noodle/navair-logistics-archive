@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 
 config({ path: '.env.local', quiet: true });
 process.env.MAIL_MODE = 'preview';
+delete process.env.MAIL_TEST_RECIPIENT;
 
 import { handleMailWebhook, listMail, processOutbox } from '../src/lib/mail';
 import { pool, withActor } from '../src/lib/db';
@@ -14,12 +15,12 @@ const owner = randomUUID();
 const customer = randomUUID();
 const tag = randomUUID().slice(0, 8);
 
-async function addMail(status = 'pending', options: { providerId?: string; firstAttemptAt?: string } = {}) {
+async function addMail(status = 'pending', options: { providerId?: string; firstAttemptAt?: string; recipient?: string } = {}) {
   const id = randomUUID();
   await admin.query(
     `INSERT INTO email_outbox(id,kind,recipient,subject,body,reply_to,idempotency_key,status,provider_id,first_attempt_at,available_at)
      VALUES($1,'staff',$2,'Test mail','Body','reply@example.test',$3,$4,$5,$6,now()-interval '1 minute')`,
-    [id, `recipient-${tag}@example.test`, `test-mail/${id}`, status, options.providerId ?? null, options.firstAttemptAt ?? null],
+    [id, options.recipient ?? `recipient-${tag}@example.test`, `test-mail/${id}`, status, options.providerId ?? null, options.firstAttemptAt ?? null],
   );
   return id;
 }
@@ -125,6 +126,65 @@ describe('durable mail outbox', () => {
     process.env.MAIL_MODE = 'preview';
     expect(result).toMatchObject({ processed: 1, sent: 1, failed: 0 });
     expect(from).toBe('Navair <operations@mail.navair-logistics.co>');
+  });
+
+  it('blocks a recipient outside MAIL_TEST_RECIPIENT before invoking the live transport', async () => {
+    const id = await addMail();
+    process.env.MAIL_MODE = 'resend';
+    process.env.RESEND_API_KEY = 're_test_transport';
+    process.env.BUSINESS_EMAIL = 'owner@gmail.com';
+    process.env.MAIL_FROM = 'Navair <operations@mail.navair-logistics.co>';
+    process.env.MAIL_TEST_RECIPIENT = 'shauryapunj404@gmail.com';
+    let called = false;
+    const result = await processOutbox(owner, async () => {
+      called = true;
+      return { id: `provider-${id}` };
+    });
+    delete process.env.MAIL_TEST_RECIPIENT;
+    process.env.MAIL_MODE = 'preview';
+    expect(called).toBe(false);
+    expect(result).toMatchObject({ processed: 1, sent: 0, failed: 1 });
+    expect((await admin.query('SELECT status,last_error FROM email_outbox WHERE id=$1', [id])).rows[0])
+      .toMatchObject({ status: 'failed', last_error: 'Recipient outside active test allowlist.' });
+  });
+
+  it('allows the configured MAIL_TEST_RECIPIENT to reach the live transport', async () => {
+    const recipient = 'shauryapunj404@gmail.com';
+    const id = await addMail('pending', { recipient });
+    process.env.MAIL_MODE = 'resend';
+    process.env.RESEND_API_KEY = 're_test_transport';
+    process.env.BUSINESS_EMAIL = recipient;
+    process.env.MAIL_FROM = 'Navair <operations@mail.navair-logistics.co>';
+    process.env.MAIL_TEST_RECIPIENT = recipient;
+    let called = false;
+    const result = await processOutbox(owner, async (_config, job) => {
+      called = job.recipient === recipient;
+      return { id: `provider-${id}` };
+    });
+    delete process.env.MAIL_TEST_RECIPIENT;
+    process.env.MAIL_MODE = 'preview';
+    expect(called).toBe(true);
+    expect(result).toMatchObject({ processed: 1, sent: 1, failed: 0 });
+  });
+
+  it('fails closed when MAIL_TEST_RECIPIENT is blank', async () => {
+    const id = await addMail();
+    process.env.MAIL_MODE = 'resend';
+    process.env.RESEND_API_KEY = 're_test_transport';
+    process.env.BUSINESS_EMAIL = 'owner@gmail.com';
+    process.env.MAIL_FROM = 'Navair <operations@mail.navair-logistics.co>';
+    process.env.MAIL_TEST_RECIPIENT = '   ';
+    let called = false;
+    const result = await processOutbox(owner, async () => {
+      called = true;
+      return { id: `provider-${id}` };
+    });
+    delete process.env.MAIL_TEST_RECIPIENT;
+    process.env.MAIL_MODE = 'preview';
+    expect(called).toBe(false);
+    expect(result).toMatchObject({ processed: 1, sent: 0, failed: 1 });
+    expect((await admin.query('SELECT last_error FROM email_outbox WHERE id=$1', [id])).rows[0].last_error)
+      .toBe('MAIL_TEST_RECIPIENT must be a valid email address.');
   });
 
   it('does not invoke a live transport after the idempotency window has expired', async () => {

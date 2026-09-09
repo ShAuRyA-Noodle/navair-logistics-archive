@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { EnquiryForm } from '@/components/enquiry-form';
 import styles from './landing.module.css';
 
 const services = [
@@ -17,6 +16,6 @@ export default function Home() {
     </section>
     <section className={styles.services} aria-labelledby="services-heading"><div className={styles.sectionIntro}><p className="eyebrow">Freight services</p><h2 id="services-heading">A practical starting point for each kind of move.</h2></div><div className={styles.serviceGrid}>{services.map(([name, description]) => <article key={name}><h3>{name}</h3><p>{description}</p></article>)}</div></section>
     <section className={styles.process} aria-labelledby="process-heading"><div className={styles.sectionIntro}><p className="eyebrow">The enquiry process</p><h2 id="process-heading">Three steps to a considered shipment plan.</h2></div><ol>{[['01', 'Set the route', 'Add the origin, destination, and service that best fits the shipment.'], ['02', 'Add the shipment', 'Tell us what is moving, when it is needed, and any handling requirements.'], ['03', 'Receive next steps', 'Our operations team reviews the request and follows up from the workspace.']].map(([number, title, description]) => <li key={number}><span>{number}</span><div><h3>{title}</h3><p>{description}</p></div></li>)}</ol></section>
-    <section id="enquire" className={styles.enquirySection}><EnquiryForm /></section>
+    <section id="enquire" className={styles.enquirySection}><div className={styles.enquiryGateway}><div><p className="eyebrow">New to exporting?</p><h2>A guided form for your first shipment.</h2><p>Share the basics in plain language. We’ll help you work out the details.</p></div><Link className="button-link" href="/first-time-exporter">Start first-time exporter enquiry</Link></div></section>
   </div>;
 }

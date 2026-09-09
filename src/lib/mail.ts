@@ -18,6 +18,7 @@ const TRANSPORT_TIMEOUT_MS = 4 * 60 * 1000;
 const PUBLIC_SENDER_DOMAINS = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'yahoo.com', 'icloud.com', 'me.com', 'aol.com', 'protonmail.com']);
 class MailConfigurationError extends Error {}
 class MailTransportTimeoutError extends Error {}
+class TestRecipientRestrictionError extends Error {}
 
 function environment(): MailConfig {
   const mode = process.env.MAIL_MODE ?? 'preview';
@@ -43,6 +44,18 @@ function emailDomain(value: string) {
   return match?.[1]?.toLowerCase();
 }
 
+function normalizedEmail(value: string) {
+  return /^\s*[^\s@<>]+@[^\s@<>]+\s*$/i.test(value) ? value.trim().toLowerCase() : undefined;
+}
+
+function enforceTestRecipient(recipient: string) {
+  const configured = process.env.MAIL_TEST_RECIPIENT;
+  if (configured === undefined) return;
+  const allowed = normalizedEmail(configured);
+  if (!allowed) throw new MailConfigurationError('MAIL_TEST_RECIPIENT must be a valid email address.');
+  if (normalizedEmail(recipient) !== allowed) throw new TestRecipientRestrictionError('Recipient outside active test allowlist.');
+}
+
 function isPublicOrPlaceholderDomain(domain: string) {
   return PUBLIC_SENDER_DOMAINS.has(domain) || domain === 'example.com' || /\.(example|test|invalid|localhost)$/.test(domain);
 }
@@ -61,7 +74,7 @@ function responseStatus(error: unknown): number | undefined {
 }
 
 function canRetry(job: MailJob, error: unknown) {
-  if (error instanceof MailConfigurationError) return false;
+  if (error instanceof MailConfigurationError || error instanceof TestRecipientRestrictionError) return false;
   const status = responseStatus(error);
   const transient = status === undefined || status === 429 || status >= 500 || (status === 409 && isConcurrentIdempotencyError(error));
   const firstAttempt = job.first_attempt_at ? new Date(job.first_attempt_at).getTime() : Date.now();
@@ -140,6 +153,7 @@ export async function processOutbox(actorId: string, send: MailTransport = resen
         result.failed += 1;
         continue;
       }
+      enforceTestRecipient(job.recipient);
       const response = await withTransportTimeout(send({ apiKey: config.apiKey!, from: config.from! }, job));
       await finish(actorId, job, 'sent', { providerId: response.id });
       result.sent += 1;

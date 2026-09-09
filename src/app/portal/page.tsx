@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { api, errorMessage, formatDate, formatDateTime } from '@/components/api';
 import { Loading, Notice } from '@/components/notice';
 import { ForecastChart } from '@/components/forecast-chart';
-import { HistoricalPriceTable } from '@/components/forecast-analyzer';
+import { HistoricalPriceTable } from '@/components/historical-price-table';
 import type { Enquiry, Forecast, Journey, Pagination, Radar, Session } from '@/components/types';
 
 export default function PortalPage() {

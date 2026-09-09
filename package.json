@@ -18,9 +18,10 @@
     "db:seed": "tsx scripts/seed.ts",
     "setup": "npm run db:start && npm run db:migrate && npm run db:seed",
     "local": "npm run setup && tsx scripts/local.ts",
-    "worker": "tsx scripts/worker.ts"
-    ,"data:import": "tsx scripts/import-data.ts"
-    ,"test:smoke": "tsx scripts/smoke.ts"
+    "worker": "tsx scripts/worker.ts",
+    "data:import": "tsx scripts/import-data.ts",
+    "test:smoke": "tsx scripts/smoke.ts",
+    "db:export": "tsx scripts/export-db.ts"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.6",

@@ -96,7 +96,7 @@ Dependency scripts are disabled by `.npmrc`. Installed packages are pinned and t
 
 The company still needs to supply actual records, domain and email identity, service accounts, staff ownership details, and shipment workflows. No real Google sign-in, carrier feed, or live email delivery has been verified.
 
-For real email, verify a Navair-owned sending domain in Resend, configure its sender plus API/webhook keys and worker principal, and select `MAIL_MODE=resend`. The business inbox can be Gmail and need not match the sender domain. Review recipients/templates before enabling delivery. Preview jobs remain previews; they are not silently resent when live mode is enabled.
+For real email, verify a Navair-owned sending domain in Resend, configure its sender plus API/webhook keys and worker principal, and select `MAIL_MODE=resend`. The business inbox can be Gmail and need not match the sender domain. A local live-test configuration may set `MAIL_TEST_RECIPIENT` to one explicitly authorized inbox; it rejects every other recipient before transport. Reconfigure or remove that restriction deliberately before client launch. Preview jobs remain previews; they are not silently resent when live mode is enabled.
 
 For Google, configure the provider/client in Supabase with exact callback destinations, set the server-side Supabase URL/publishable key, and test `/api/auth/google` through callback/logout against a fresh real-data environment. This application uses Supabase for identity and direct PostgreSQL connections for its data. A hosted Supabase database can be evaluated later; direct database roles/policies and connections must be migrated/tested explicitly.
 

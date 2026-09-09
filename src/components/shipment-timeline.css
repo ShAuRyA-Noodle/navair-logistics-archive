@@ -1,0 +1,28 @@
+/* Vertical journey. Reserved status colours mark done / here-now / late, and each one
+   sits beside a word, never carrying the meaning alone. */
+
+.ship-timeline ol { display:grid; gap:0; list-style:none; margin:0; padding:0; }
+.ship-stage { display:grid; gap:.75rem; grid-template-columns:1.55rem minmax(0,1fr); padding:0 0 .9rem; position:relative; }
+.ship-stage:not(:last-child)::before { background:var(--line); content:''; height:100%; left:.72rem; position:absolute; top:1.3rem; width:2px; }
+.ship-mark { align-items:center; background:var(--paper); border:2px solid var(--line); border-radius:50%; color:var(--muted); display:flex; font-size:.7rem; height:1.55rem; justify-content:center; position:relative; width:1.55rem; z-index:1; }
+.ship-body { min-width:0; }
+.ship-head { align-items:baseline; display:flex; flex-wrap:wrap; gap:.5rem; justify-content:space-between; margin:0 0 .15rem; }
+.ship-head strong { font-size:.98rem; }
+.ship-date { color:var(--muted); font-size:.8rem; white-space:nowrap; }
+.ship-plain { color:var(--ink); font-size:.86rem; line-height:1.45; margin:0; }
+.ship-note { background:var(--wash); border-radius:6px; color:var(--ink); font-size:.83rem; margin:.4rem 0 0; padding:.4rem .55rem; }
+.ship-now { color:var(--green); font-size:.83rem; font-weight:700; margin:.3rem 0 0; }
+.ship-late { color:var(--red); font-size:.82rem; margin:.25rem 0 0; }
+.ship-early { color:var(--green); font-size:.82rem; margin:.25rem 0 0; }
+.ship-caption { color:var(--muted); font-size:.8rem; margin:.4rem 0 0; }
+
+.ship-stage-done .ship-mark { background:var(--green-wash); border-color:var(--green); color:var(--green); }
+.ship-stage-done:not(:last-child)::before { background:var(--green); }
+.ship-stage-current .ship-mark { background:var(--paper); border-color:var(--navy); color:var(--navy); }
+.ship-stage-current .ship-head strong { color:var(--navy); }
+.ship-stage-ahead .ship-plain,.ship-stage-ahead .ship-head strong { color:var(--muted); }
+
+.ship-planned { background:var(--paper); border:1px solid var(--line); border-radius:12px; display:grid; gap:.8rem; padding:1rem 1.1rem; }
+.ship-planned-head { align-items:start; display:flex; flex-wrap:wrap; gap:.6rem; justify-content:space-between; }
+.ship-planned-head h3 { margin:.1rem 0 0; }
+.ship-planned-eta { color:var(--muted); font-size:.85rem; margin:0; }

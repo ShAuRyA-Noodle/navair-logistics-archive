@@ -1,4 +1,6 @@
 .status { color:var(--muted); font-size:.84rem; grid-column:1 / -1; margin:.1rem 0; }
+.status p { margin:.2rem 0; }
+.suggestions button { background:transparent; border:0; color:var(--green); cursor:pointer; font:inherit; font-weight:700; margin:0 .15rem; padding:0; text-decoration:underline; text-underline-offset:3px; }
 .notice { background:#f4f8f6; border:1px solid #c9dfd2; border-left:4px solid var(--green); border-radius:6px; grid-column:1 / -1; padding:1rem; }
 .notice.watch { background:#fff9ed; border-color:#e6ce9a; border-left-color:var(--amber); }
 .notice.elevated { background:#fff5ed; border-color:#e3b782; border-left-color:var(--amber); }

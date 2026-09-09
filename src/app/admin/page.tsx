@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api, errorMessage, formatDate, formatDateTime, patch } from '@/components/api';
 import { Loading, Notice } from '@/components/notice';
+import { nextStages, stageLabel } from '@/lib/lifecycle';
 import type { Actor, Commitment, Enquiry, Finance, Forecast, Journey, MailMessage, Pagination, Route, Session, ShipmentMode } from '@/components/types';
 
 const permissions = ['cases.all', 'cases.assigned', 'cases.accept', 'shipments.update', 'finance.view', 'commitments.manage', 'mail.manage'] as const;
@@ -92,14 +93,14 @@ function AcceptForm({ item, routes, onChanged }: { item: Enquiry; routes: Route[
 
 function ShipmentPanel({ journey, canUpdate, onChanged }: { journey: Journey; canUpdate: boolean; onChanged: () => void }) {
   const [error, setError] = useState<string | null>(null); const [busy, setBusy] = useState(false);
-  const next = nextStatuses(journey.shipment.status);
+  const next = nextStages(journey.shipment.status, { mode: journey.enquiry.mode, transitDays: journey.shipment.transitDays ?? null, crossBorder: journey.shipment.crossBorder ?? null });
   async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const data = new FormData(event.currentTarget); const status = String(data.get('status')); setBusy(true); setError(null); try { await api(`/api/shipments/${journey.shipment.id}`, patch({ status, estimatedAt: data.get('estimatedAt') ? new Date(String(data.get('estimatedAt'))).toISOString() : undefined, actualAt: data.get('actualAt') ? new Date(String(data.get('actualAt'))).toISOString() : undefined, note: String(data.get('note') ?? ''), version: journey.shipment.version })); onChanged(); } catch (reason) { setError(errorMessage(reason)); } finally { setBusy(false); } }
   const rate = journey.shipment.sellingPrice ?? 0;
   const quantity = journey.shipment.quantity ?? 0;
-  return <section className="card"><p className="eyebrow">Shipment</p><h2>{journey.shipment.status.replaceAll('_', ' ')}</h2><p>Promised date: <strong>{formatDateTime(journey.shipment.promisedAt)}</strong></p><p>Agreed rate: <strong>{journey.shipment.currency} {rate.toLocaleString()} / {journey.shipment.unit} × {quantity.toLocaleString()} = {journey.shipment.currency} {(rate * quantity).toLocaleString()}</strong></p><ol className="timeline">{journey.events.map((event) => <li key={event.id}><span /><div><strong>{event.status.replaceAll('_', ' ')}</strong><p>{event.description}</p><time>{formatDateTime(event.occurredAt)}</time></div></li>)}</ol>{canUpdate && next.length > 0 && <form className="mini-form" onSubmit={submit}><h3>Update shipment</h3>{error && <Notice>{error}</Notice>}<div className="form-grid"><label>Status<select name="status">{next.map((status) => <option key={status}>{status}</option>)}</select></label><label>New estimate<input name="estimatedAt" type="datetime-local" /></label><label>Actual delivery<input name="actualAt" type="datetime-local" /></label><label className="full">Customer-facing update<textarea name="note" rows={2} required /></label></div><button disabled={busy}>{busy ? 'Saving…' : 'Save shipment update'}</button></form>}</section>;
+  return <section className="card"><p className="eyebrow">Shipment</p><h2>{stageLabel(journey.shipment.status)}</h2><p>Promised date: <strong>{formatDateTime(journey.shipment.promisedAt)}</strong></p><p>Agreed rate: <strong>{journey.shipment.currency} {rate.toLocaleString()} / {journey.shipment.unit} × {quantity.toLocaleString()} = {journey.shipment.currency} {(rate * quantity).toLocaleString()}</strong></p><ol className="timeline">{journey.events.map((event) => <li key={event.id}><span /><div><strong>{stageLabel(event.status)}</strong><p>{event.description}</p><time>{formatDateTime(event.occurredAt)}</time></div></li>)}</ol>{canUpdate && next.length > 0 && <form className="mini-form" onSubmit={submit}><h3>Update shipment</h3>{error && <Notice>{error}</Notice>}<div className="form-grid"><label>Status<select name="status">{next.map((status) => <option key={status} value={status}>{stageLabel(status)}</option>)}</select></label><label>New estimate<input name="estimatedAt" type="datetime-local" /></label><label>Actual delivery<input name="actualAt" type="datetime-local" /></label><label className="full">Customer-facing update<textarea name="note" rows={2} required /></label></div><button disabled={busy}>{busy ? 'Saving…' : 'Save shipment update'}</button></form>}</section>;
 }
 
-function nextStatuses(status: string): string[] { if (status === 'accepted') return ['booked', 'cancelled']; if (status === 'booked') return ['collected', 'cancelled']; if (status === 'collected') return ['in_transit', 'cancelled']; if (status === 'in_transit') return ['customs', 'delivered']; if (status === 'customs') return ['in_transit', 'delivered']; return []; }
+
 
 function CommitmentPanel({ commitments, enquiries, user, onChanged }: { commitments: Commitment[]; enquiries: Enquiry[]; user: Actor; onChanged: () => void }) {
   const [error, setError] = useState<string | null>(null); const [busy, setBusy] = useState(false);

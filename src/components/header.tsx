@@ -15,10 +15,11 @@ export function Header() {
     try { await api('/api/auth/logout', { method: 'POST' }); window.location.assign('/'); } finally { setSigningOut(false); }
   }
   return <>
-    {session?.demoMode && <div className="demo-banner" role="status">Local demo — synthetic shipment history. Emails stay in preview.</div>}
+    {session?.demoMode && <div className="demo-banner" role="status">Local demo — synthetic shipment history. {session.mailMode === 'resend' ? 'Live test emails are restricted to the configured test inbox.' : 'Emails stay in preview.'}</div>}
     <header className="topbar">
       <Link className="brand" href="/" aria-label="Navair logistics home">NAVAIR <span>LOGISTICS</span></Link>
       <nav aria-label="Main navigation">
+        <Link href="/first-time-exporter">First-time exporter</Link>
         <Link href="/#enquire">Enquire</Link>
         <Link href="/forecast">Forecast</Link>
         <Link href="/portal">My shipments</Link>

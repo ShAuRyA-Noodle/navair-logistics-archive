@@ -1,0 +1,81 @@
+/* One question per screen. Type is large, targets are thumb-sized, and only one decision
+   is ever on screen, so the flow reads like an app sign-up rather than a freight form. */
+
+.wizard { background:var(--paper); border:1px solid var(--line); border-radius:14px; display:grid; gap:1.4rem; margin:0 auto; max-width:640px; padding:1.6rem 1.5rem 1.8rem; }
+
+.progress { display:grid; gap:.45rem; }
+.progressTrack { background:var(--line); border-radius:999px; height:5px; overflow:hidden; }
+.progressFill { background:var(--green); height:100%; transition:width .28s ease; }
+.progressLabel { color:var(--muted); font-size:.78rem; margin:0; }
+
+.stepBody { animation:stepIn .24s ease; display:grid; gap:.35rem; }
+@keyframes stepIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion:reduce) { .stepBody { animation:none; } .progressFill { transition:none; } }
+
+.question { font-size:clamp(1.45rem,4.2vw,2rem); letter-spacing:-.02em; line-height:1.15; margin:0; }
+.question:focus { outline:none; }
+.hint { color:var(--muted); font-size:.92rem; margin:0 0 1rem; }
+
+.bigField { display:block; margin-bottom:.6rem; }
+.bigField input { border:1px solid var(--line); border-radius:10px; font-size:1.15rem; padding:.85rem .9rem; width:100%; }
+.bigField input:focus-visible { border-color:var(--navy); outline:2px solid var(--navy); outline-offset:1px; }
+
+.choices { display:grid; gap:.55rem; margin-bottom:.6rem; }
+.choicesTight { grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); }
+
+.choice { background:var(--paper); border:1px solid var(--line); border-radius:12px; color:var(--ink); cursor:pointer; display:grid; font-weight:400; gap:.15rem; justify-items:start; min-height:60px; padding:.75rem .95rem; text-align:left; width:100%; }
+.choice strong { font-size:1.02rem; }
+.choice small { color:var(--muted); font-size:.82rem; }
+.choice:hover { border-color:var(--navy); }
+.choiceActive { background:var(--green-wash); border-color:var(--green); box-shadow:inset 0 0 0 1px var(--green); }
+
+.chip { background:var(--paper); border:1px solid var(--line); border-radius:999px; color:var(--ink); cursor:pointer; font-size:.92rem; font-weight:400; min-height:46px; padding:.5rem 1rem; }
+.chip:hover { border-color:var(--navy); }
+.chipActive { background:var(--green-wash); border-color:var(--green); box-shadow:inset 0 0 0 1px var(--green); font-weight:700; }
+
+.inlineFields,.contactFields { display:grid; gap:.75rem; margin-bottom:.5rem; }
+.inlineFields { grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); }
+.inlineFields label,.contactFields label { color:var(--ink); display:grid; font-size:.88rem; font-weight:700; gap:.3rem; }
+.inlineFields label small,.contactFields label small { color:var(--muted); font-weight:400; }
+.inlineFields input,.contactFields input,.contactFields textarea { border:1px solid var(--line); border-radius:9px; font-size:1rem; padding:.65rem .75rem; width:100%; }
+.contactFields textarea { resize:vertical; }
+
+.actions { align-items:center; display:flex; gap:.6rem; justify-content:flex-end; margin-top:1rem; }
+.actions button { min-height:48px; padding:.7rem 1.4rem; }
+.back { background:transparent; border:1px solid var(--line); color:var(--ink); }
+.back:hover { background:var(--wash); }
+
+.fieldError { color:var(--red); font-size:.8rem; font-weight:400; }
+
+.review { border-top:1px solid var(--line); padding-top:.8rem; }
+.review summary { color:var(--muted); cursor:pointer; font-size:.85rem; }
+.review dl { display:grid; gap:.45rem; margin:.7rem 0 0; }
+.review dl div { display:grid; gap:.1rem; }
+.review dt { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.05em; }
+.review dd { margin:0; font-size:.9rem; }
+
+.success { background:var(--paper); border:1px solid var(--line); border-radius:14px; margin:0 auto; max-width:640px; padding:2rem 1.6rem; text-align:center; }
+.success h2 { margin:.3rem 0 .6rem; }
+.success p { color:var(--ink); margin:0 auto 1.2rem; max-width:34rem; }
+
+.srOnly { border:0; clip:rect(0 0 0 0); height:1px; margin:-1px; overflow:hidden; padding:0; position:absolute; white-space:nowrap; width:1px; }
+
+@media (max-width:560px) {
+  .wizard { border-left:0; border-radius:0; border-right:0; padding:1.2rem 1rem 1.5rem; }
+  .actions { justify-content:stretch; }
+  .actions button { flex:1; }
+}
+
+/* Fields that appear only when an answer needs more from the customer. They must not
+   auto-advance the wizard, so they sit inside the same step as the choice that opened them. */
+.reveal { animation:stepIn .2s ease; color:var(--ink); display:grid; font-size:.88rem; font-weight:700; gap:.3rem; margin-top:.7rem; }
+.reveal input { border:1px solid var(--green); border-radius:9px; font-size:1rem; font-weight:400; padding:.7rem .75rem; width:100%; }
+.reveal input:focus-visible { outline:2px solid var(--navy); outline-offset:1px; }
+
+.optional { border:1px dashed var(--line); border-radius:10px; margin-top:.7rem; padding:.6rem .8rem; }
+.optional summary { color:var(--ink); cursor:pointer; font-size:.9rem; font-weight:700; }
+.optional summary small { color:var(--muted); font-weight:400; }
+.optionalHint { color:var(--muted); font-size:.82rem; margin:.5rem 0 .6rem; }
+.dimensionRow { display:grid; gap:.6rem; grid-template-columns:repeat(auto-fit,minmax(96px,1fr)); }
+.dimensionRow label { color:var(--ink); display:grid; font-size:.8rem; font-weight:700; gap:.25rem; }
+.dimensionRow input,.dimensionRow select { border:1px solid var(--line); border-radius:8px; font-size:.95rem; font-weight:400; padding:.55rem .6rem; width:100%; }
