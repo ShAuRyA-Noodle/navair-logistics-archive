@@ -23,7 +23,7 @@ export function ShipmentTimeline({ stages, caption }: { stages: TrackedStage[]; 
       {stages.map((stage) => {
         const variance = varianceWords(stage.varianceDays);
         return <li key={stage.key} className={`ship-stage ship-stage-${stage.state}`}>
-          <span className="ship-mark" aria-hidden="true">{stage.state === 'done' ? '✓' : stage.state === 'current' ? '●' : ''}</span>
+          <span className="ship-mark" aria-hidden="true">{stage.state === 'done' ? '✓' : stage.state === 'current' ? '●' : stage.state === 'skipped' ? '–' : ''}</span>
           <div className="ship-body">
             <p className="ship-head">
               <strong>{stage.label}</strong>
@@ -33,6 +33,7 @@ export function ShipmentTimeline({ stages, caption }: { stages: TrackedStage[]; 
             {stage.note && <p className="ship-note">{stage.note}</p>}
             {variance && <p className={stage.varianceDays! > 0 ? 'ship-late' : 'ship-early'}>{variance}</p>}
             {stage.state === 'current' && <p className="ship-now">Your cargo is here right now.</p>}
+            {stage.state === 'skipped' && <p className="ship-skipped">Not separately recorded on this shipment.</p>}
           </div>
         </li>;
       })}

@@ -56,17 +56,10 @@ export type Shipment = {
   mode?: string;
 };
 
-export type TrackedStage = {
-  key: string;
-  label: string;
-  plain: string;
-  date: string;
-  dayOffset: number;
-  state: 'done' | 'current' | 'ahead';
-  happenedAt: string | null;
-  varianceDays: number | null;
-  note: string | null;
-};
+// The lifecycle module is the single definition of a stage; imported and re-exported here
+// so client components can keep taking their types from one place.
+import type { TrackedStage } from '@/lib/lifecycle';
+export type { TrackedStage };
 
 export type JourneyEvent = { id: string; status: string; description: string; occurredAt: string };
 export type Journey = { enquiry: Enquiry; shipment: Shipment; events: JourneyEvent[]; stages: TrackedStage[] };

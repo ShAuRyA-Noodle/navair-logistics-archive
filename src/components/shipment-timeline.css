@@ -21,6 +21,9 @@
 .ship-stage-current .ship-mark { background:var(--paper); border-color:var(--navy); color:var(--navy); }
 .ship-stage-current .ship-head strong { color:var(--navy); }
 .ship-stage-ahead .ship-plain,.ship-stage-ahead .ship-head strong { color:var(--muted); }
+.ship-stage-skipped .ship-mark { border-style:dashed; }
+.ship-stage-skipped .ship-plain,.ship-stage-skipped .ship-head strong,.ship-stage-skipped .ship-date { color:var(--muted); }
+.ship-skipped { color:var(--muted); font-size:.8rem; margin:.25rem 0 0; }
 
 .ship-planned { background:var(--paper); border:1px solid var(--line); border-radius:12px; display:grid; gap:.8rem; padding:1rem 1.1rem; }
 .ship-planned-head { align-items:start; display:flex; flex-wrap:wrap; gap:.6rem; justify-content:space-between; }

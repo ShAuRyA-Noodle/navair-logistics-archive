@@ -162,3 +162,27 @@ describe('tracking actual progress against the plan', () => {
     expect(stageLabel('cancelled')).toBe('Cancelled');
   });
 });
+
+describe('stages a shipment moved past without a log entry', () => {
+  const lane: LaneContext = { mode: 'sea', transitDays: 21, crossBorder: true };
+  const plan = journeyPlan(lane, { kind: 'from', start: '2026-09-01T00:00:00.000Z' });
+
+  it('calls them skipped rather than pretending they are still to come', () => {
+    const stages = trackJourney(plan, [
+      { status: 'accepted', occurredAt: '2026-09-01T00:00:00.000Z' },
+      { status: 'delivered', occurredAt: '2026-09-25T00:00:00.000Z' },
+    ]);
+    const packing = stages.find((stage) => stage.key === 'packing')!;
+    const delivered = stages.find((stage) => stage.key === 'delivered')!;
+    expect(delivered.state).toBe('done');
+    expect(packing.state).toBe('skipped');
+    expect(stages.some((stage) => stage.state === 'ahead')).toBe(false);
+  });
+
+  it('still marks genuinely future stages as ahead', () => {
+    const stages = trackJourney(plan, [{ status: 'collected', occurredAt: '2026-09-03T00:00:00.000Z' }]);
+    expect(stages.find((stage) => stage.key === 'at_origin_warehouse')!.state).toBe('current');
+    expect(stages.find((stage) => stage.key === 'delivered')!.state).toBe('ahead');
+    expect(stages.find((stage) => stage.key === 'booked')!.state).toBe('skipped');
+  });
+});

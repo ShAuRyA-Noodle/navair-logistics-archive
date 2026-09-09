@@ -148,14 +148,16 @@ export function journeyPlan(lane: LaneContext, anchor: PlanAnchor): PlannedStage
 }
 
 export type TrackedStage = PlannedStage & {
-  state: 'done' | 'current' | 'ahead';
+  state: 'done' | 'current' | 'ahead' | 'skipped';
   happenedAt: string | null;
   varianceDays: number | null;
   note: string | null;
 };
 
 // Overlay what actually happened on what was planned. A stage counts as done when an event
-// carries its name; the stage after the furthest done one is where the cargo is now.
+// carries its name, and the stage after the furthest done one is where the cargo is now.
+// A stage the shipment has already moved past without ever being logged is 'skipped', not
+// 'ahead': claiming a delivered shipment still has packing to come would be a lie.
 export function trackJourney(
   plan: PlannedStage[],
   events: Array<{ status: string; occurredAt: string; description?: string | null }>,
@@ -177,9 +179,11 @@ export function trackJourney(
       : null;
     const state: TrackedStage['state'] = event
       ? 'done'
-      : !options.cancelled && index === reached + 1
-        ? 'current'
-        : 'ahead';
+      : index < reached
+        ? 'skipped'
+        : !options.cancelled && index === reached + 1
+          ? 'current'
+          : 'ahead';
     return { ...stage, state, happenedAt, varianceDays: variance, note: event?.description ?? null };
   });
 }

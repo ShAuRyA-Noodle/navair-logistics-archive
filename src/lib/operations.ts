@@ -85,9 +85,14 @@ export async function getJourney(actorId:string,id:string) {
     const events=(await db.query('SELECT id,status,description,occurred_at AS "occurredAt" FROM shipment_events WHERE shipment_id=$1 ORDER BY occurred_at,id',[row.id])).rows;
     const shipment={...row,sellingPrice:Number(row.sellingPrice),quantity:Number(row.quantity),transitDays:row.transitDays===null?null:Number(row.transitDays)};
     const lane:LaneContext={mode:row.mode,transitDays:shipment.transitDays,crossBorder:row.crossBorder};
-    // The plan is stretched across the window the customer was actually promised, so the
-    // tracker can never show a schedule that disagrees with the agreed delivery date.
-    const plan=journeyPlan(lane,{kind:'between',start:row.createdAt,end:row.promisedAt});
+    // Anchor from whichever came first, the shipment record or its earliest event, and only
+    // stretch to the promised date when that date is genuinely later. A promise that is not
+    // after the start would squash every stage onto one day, so those fall back to the
+    // lane's nominal durations instead of a misleading flat schedule.
+    const firstEvent=events[0]?.occurredAt as string|undefined;
+    const start=firstEvent&&new Date(firstEvent).getTime()<new Date(row.createdAt).getTime()?firstEvent:row.createdAt;
+    const promisedIsLater=new Date(row.promisedAt).getTime()>new Date(start).getTime()+86400000;
+    const plan=journeyPlan(lane,promisedIsLater?{kind:'between',start,end:row.promisedAt}:{kind:'from',start});
     const stages=trackJourney(plan,events,{cancelled:row.status==='cancelled'});
     return {enquiry,shipment,events,stages};
   });
