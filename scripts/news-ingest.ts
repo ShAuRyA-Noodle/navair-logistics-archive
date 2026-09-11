@@ -100,11 +100,15 @@ async function main() {
 
     // Analysis is the only paid step, so it is rationed: important events first, one call
     // per (event, corridor) ever, and nothing re-generated that already exists.
-    const MIN_IMPORTANCE = Number(process.env.NEWS_MIN_IMPORTANCE ?? 6);
-    const MAX_CALLS = Number(process.env.NEWS_MAX_ANALYSES ?? 12);
+    const MIN_IMPORTANCE = Number(process.env.NEWS_MIN_IMPORTANCE ?? 5);
+    const MAX_CALLS = Number(process.env.NEWS_MAX_ANALYSES ?? 60);
     let analysed = 0;
     let skipped = 0;
+    let consecutiveFailures = 0;
     const failures: string[] = [];
+    // If the model keeps refusing, something is actually wrong. Stop rather than grind
+    // through every corridor collecting the same error a hundred times.
+    const FAILURE_LIMIT = 5;
     for (const cluster of clusters) {
       if (analysed >= MAX_CALLS) break;
       if (cluster.importance < MIN_IMPORTANCE || cluster.corridors.length === 0) continue;
@@ -122,17 +126,20 @@ async function main() {
             measurements: cluster.items.map((item) => item.measurement).filter((value): value is Record<string, unknown> => Boolean(value)),
           });
           await client.query(
-            `INSERT INTO event_impacts(event_id,corridor,severity,headline,teaser,body,actions,confidence,citations,model)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+            `INSERT INTO event_impacts(event_id,corridor,severity,headline,teaser,body,actions,confidence,citations,model,detail)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
              ON CONFLICT(event_id,corridor) DO NOTHING`,
             [stored.id, corridor, analysis.severity, analysis.headline, analysis.teaser, analysis.body,
-              JSON.stringify(analysis.actions), analysis.confidence, JSON.stringify(analysis.citations), analysis.model],
+              JSON.stringify(analysis.actions), analysis.confidence, JSON.stringify(analysis.citations), analysis.model,
+              JSON.stringify({ bullets: analysis.bullets, keyNumbers: analysis.keyNumbers, outlook: analysis.outlook })],
           );
           analysed += 1;
+          consecutiveFailures = 0;
         } catch (error) {
           if (error instanceof AnalysisUnavailable) {
             failures.push(`${corridor}: ${error.message}`);
-            if (error.message.includes('not configured')) { analysed = MAX_CALLS; break; }
+            consecutiveFailures += 1;
+            if (error.message.includes('not configured') || consecutiveFailures >= FAILURE_LIMIT) { analysed = MAX_CALLS; break; }
           } else throw error;
         }
       }

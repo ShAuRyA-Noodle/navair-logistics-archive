@@ -24,15 +24,24 @@ export type AnalysisInput = {
   measurements: Array<Record<string, unknown>>;
 };
 
+// Scannable, not prose. Bullets carry the findings, keyNumbers carry the figures worth
+// showing large, outlook carries the forward view. Every figure must name its source so a
+// reader can check it - an unsourced number is the one thing this feature cannot ship.
 const schema = z.object({
   severity: z.enum(['none', 'watch', 'elevated', 'severe']),
-  headline: z.string().trim().min(8).max(120),
-  teaser: z.string().trim().min(20).max(240),
-  body: z.string().trim().min(80).max(2400),
-  actions: z.array(z.string().trim().min(8).max(240)).max(4).default([]),
+  headline: z.string().trim().min(8).max(110),
+  teaser: z.string().trim().min(20).max(200),
+  bullets: z.array(z.string().trim().min(10).max(220)).min(2).max(6),
+  keyNumbers: z.array(z.object({
+    label: z.string().trim().min(2).max(40),
+    value: z.string().trim().min(1).max(30),
+    source: z.string().trim().min(2).max(40),
+  })).max(4).default([]),
+  outlook: z.array(z.string().trim().min(10).max(220)).max(3).default([]),
+  actions: z.array(z.string().trim().min(8).max(200)).max(4).default([]),
   confidence: z.enum(['low', 'medium', 'high']),
 });
-export type Analysis = z.infer<typeof schema> & { model: string; citations: string[] };
+export type Analysis = z.infer<typeof schema> & { model: string; citations: string[]; body: string };
 
 export class AnalysisUnavailable extends Error {}
 
@@ -48,28 +57,57 @@ function corridorPhrase(corridor: string): string {
 }
 
 const SYSTEM = [
-  'You advise Indian exporters and importers at a freight forwarder called Navair.',
-  'Given a world event and one shipping corridor, explain what practically changes for cargo moving on that corridor.',
+  'You are a senior trade-disruption analyst at Navair, an Indian freight forwarder. You brief exporters who have never shipped before.',
+  'Given one world event and one shipping corridor, say what practically changes for cargo on that corridor.',
+  '',
+  'Style - this is the whole point, get it right:',
+  '- Bullets, never paragraphs. Each bullet is one fact or one consequence, under 25 words.',
+  '- Wrap the few genuinely important figures, places and terms in **double asterisks** so the page can highlight them. Two or three per bullet at most. Highlighting everything highlights nothing.',
+  '- Plain words a first-time exporter knows. No jargon, no filler, no "it is important to note", no "in the current landscape".',
+  '- Every number you state must appear in the material given to you, and keyNumbers must name where it came from.',
   '',
   'Absolute rules:',
-  '1. Never state, estimate or imply a price, freight rate, percentage cost change, or market direction. Navair publishes its own statistically backtested price forecast and your text must never compete with it or contradict it.',
-  '2. Never predict markets, stock moves or currency. You explain operational consequence only: availability of space, transit time, routing, paperwork, congestion, insurance and planning.',
-  '3. Use only the reports and official figures supplied. If they do not support a claim, leave it out. Invent nothing - no vessel names, no dates, no numbers that were not given to you.',
-  '4. If the supplied material genuinely does not affect this corridor, answer with severity "none" and say so plainly. That is a useful answer, not a failure.',
-  '5. Write for somebody shipping for the first time. Short sentences, ordinary words, no jargon, no filler. Never write phrases like "in today\'s dynamic landscape" or "it is important to note".',
-  '6. State your uncertainty in the body when the evidence is thin.',
+  '1. Never state, estimate or imply a price, a freight rate, a cost percentage, or a market direction. Navair publishes its own backtested price forecast; your text must never compete with it.',
+  '2. No market, stock or currency predictions. Your forward view covers operations only: space availability, transit time, routing, paperwork, congestion, insurance, planning windows.',
+  '3. Invent nothing. No vessel names, no dates, no figures that were not supplied. If the material does not support a claim, leave it out.',
+  '4. If the event genuinely does not touch this corridor, answer severity "none" and say so in one or two bullets. That is a correct answer, not a failure.',
+  '5. outlook is what to expect next and how likely it is, in operational terms, hedged honestly ("if the closure holds past a week, expect...").',
+  '6. Say when evidence is thin. Set confidence "low" rather than writing confidently from one report.',
   '',
-  'Return only JSON matching this shape:',
-  '{"severity":"none|watch|elevated|severe","headline":"under 15 words","teaser":"one sentence, under 30 words","body":"2 to 4 short paragraphs","actions":["concrete step",...max 4],"confidence":"low|medium|high"}',
+  'Return only JSON:',
+  '{"severity":"none|watch|elevated|severe",',
+  ' "headline":"under 14 words, states the consequence not the event",',
+  ' "teaser":"one sentence under 28 words",',
+  ' "bullets":["2 to 6 findings, **highlighted** terms"],',
+  ' "keyNumbers":[{"label":"what it measures","value":"the figure","source":"who published it"}],',
+  ' "outlook":["up to 3 forward-looking operational expectations"],',
+  ' "actions":["up to 4 concrete steps an exporter takes this week"],',
+  ' "confidence":"low|medium|high"}',
 ].join('\n');
 
 // Words that mean the model slipped into pricing or market talk despite the rules. Caught
 // here rather than trusted, because the whole separation depends on it holding.
+// What must never appear is a claim about what shipping will cost. Quoting a sourced
+// macro figure - a UN trade value, a WTO tariff rate, an EIA crude price - is the opposite
+// of that: it is the evidence the analysis rests on. An earlier blanket ban on "currency
+// followed by a digit" got this backwards, blocking a cited Brent price while letting
+// "**$37.1 bn**" through, because \b never matches between an asterisk and a dollar sign.
+// So the patterns below target freight pricing and cost predictions specifically.
+const MONEY = String.raw`(?:inr|usd|rs\.?|us\$|\$|₹)\s?[\d.,]+\s?(?:bn|billion|mn|million|k|lakh|crore)?`;
 const FORBIDDEN = [
-  /freight rate/i, /\bper\s?(kg|kilo|container|teu)\b/i, /\b(inr|usd|rs\.?|\$|₹)\s?\d/i,
+  /freight rate/i,
+  // A money amount tied to a unit of carriage is a quote, whoever is saying it.
+  new RegExp(`${MONEY}[^.]{0,40}\\bper\\s?(kg|kilo|kilogram|container|teu|shipment|consignment)\\b`, 'i'),
+  new RegExp(`\\bper\\s?(kg|kilo|kilogram|container|teu|shipment|consignment)\\b[^.]{0,40}${MONEY}`, 'i'),
+  // A money amount sitting next to freight vocabulary is a freight price.
+  new RegExp(`(freight|shipping|haulage|carriage|charter|booking)[^.]{0,30}${MONEY}`, 'i'),
+  new RegExp(`${MONEY}[^.]{0,30}(freight|shipping|haulage|carriage|charter|booking)`, 'i'),
   /\d+\s?%\s?(increase|rise|higher|drop|fall|cheaper|more expensive)/i,
   /price(s)? (will|should|could|may) (rise|fall|increase|drop|climb)/i,
   /\bwe (expect|forecast|predict) (prices|rates)/i,
+  // Cost language is price language wearing a different coat.
+  /(lower|higher|rising|falling|reduced|increased|cheaper|costlier)\s+(shipping|freight|transport|cargo)?\s*(costs?|prices?|rates?|charges?)/i,
+  /(costs?|prices?|rates?)\s+(will|may|could|should|are likely to)\s+(rise|fall|increase|drop|climb|ease)/i,
 ];
 
 function violatesRules(text: string): string | null {
@@ -85,7 +123,9 @@ function buildPrompt(input: AnalysisInput, contextLines: string[]): string {
     `[${index + 1}] ${article.title}${article.summary ? ` — ${article.summary.slice(0, 300)}` : ''} (${article.sourceKey}, ${article.publishedAt.slice(0, 10)})`);
   const measurements = input.measurements.map((measurement) => {
     const ratio = typeof measurement.changeRatio === 'number' ? `${Math.round(measurement.changeRatio * 100)}%` : 'unknown';
-    return `${measurement.chokepoint ?? 'chokepoint'}: recorded transits ${ratio} against their own 90-day median (IMF PortWatch satellite sample; a sample, not a full count of ships).`;
+    const direction = typeof measurement.changeRatio === 'number' && measurement.changeRatio < 0 ? 'FEWER' : 'MORE';
+    return `${measurement.chokepoint ?? 'chokepoint'}: the NUMBER OF SHIPS recorded passing through was ${ratio.replace('-', '')} ${direction} than its own 90-day median`
+      + ' (IMF PortWatch satellite sample - a consistent sample, not a full count of every ship). This is about how many ships passed, NOT about how fast they travelled.';
   });
   return [
     `Corridor: ${corridorPhrase(input.corridor)}.`,
@@ -97,11 +137,27 @@ function buildPrompt(input: AnalysisInput, contextLines: string[]): string {
     measurements.length ? `\nMeasurements:\n${measurements.join('\n')}` : '',
     contextLines.length ? `\nOfficial background figures:\n${contextLines.join('\n')}` : '',
     '',
-    'Explain what this means for cargo on this corridor. Remember: no prices, no rates, no market predictions.',
+    'Brief an exporter on this corridor. Bullets, highlighted key terms, sourced figures. No prices, no rates, no market predictions.',
   ].filter(Boolean).join('\n');
 }
 
-export async function analyseImpact(input: AnalysisInput): Promise<Analysis> {
+// Groq occasionally returns an empty or half-finished generation and rejects its own JSON.
+// It is transient, so one retry recovers it; two failures in a row mean something real.
+export async function analyseImpact(input: AnalysisInput, attempt = 0): Promise<Analysis> {
+  try {
+    return await requestAnalysis(input);
+  } catch (error) {
+    const retryable = error instanceof AnalysisUnavailable
+      && /json_validate_failed|json_generate_failed|Groq responded (429|5\d\d)|timed out|did not return usable JSON/.test(error.message);
+    if (retryable && attempt < 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      return analyseImpact(input, attempt + 1);
+    }
+    throw error;
+  }
+}
+
+async function requestAnalysis(input: AnalysisInput): Promise<Analysis> {
   const key = process.env.GROQ_API_KEY;
   if (!key) throw new AnalysisUnavailable('GROQ_API_KEY is not configured, so no analysis was generated.');
   const model = process.env.GROQ_MODEL || DEFAULT_MODEL;
@@ -119,7 +175,11 @@ export async function analyseImpact(input: AnalysisInput): Promise<Analysis> {
       body: JSON.stringify({
         model,
         temperature: 0.2,
-        max_completion_tokens: 1200,
+        // gpt-oss reasons before it answers, and that reasoning is billed against the same
+        // budget. A tight cap left nothing for the JSON and Groq rejected the empty
+        // generation, so the budget is generous and the reasoning kept short.
+        max_completion_tokens: 6000,
+        reasoning_effort: 'medium',
         response_format: { type: 'json_object' },
         messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: prompt }],
       }),
@@ -147,12 +207,25 @@ export async function analyseImpact(input: AnalysisInput): Promise<Analysis> {
   const result = schema.safeParse(parsed);
   if (!result.success) throw new AnalysisUnavailable(`The model's answer did not fit the required shape: ${result.error.issues[0]?.message ?? 'unknown'}`);
 
-  const breach = violatesRules(`${result.data.headline} ${result.data.teaser} ${result.data.body} ${result.data.actions.join(' ')}`);
+  const flat = [result.data.headline, result.data.teaser, ...result.data.bullets, ...result.data.outlook,
+    ...result.data.actions, ...result.data.keyNumbers.map((entry) => `${entry.label} ${entry.value}`)].join(' ');
+  const breach = violatesRules(flat);
   if (breach) throw new AnalysisUnavailable(`The model wrote about pricing ("${breach}"), which this feature must never do, so the answer was discarded.`);
+
+  // A plain-text rendering is kept alongside the structure so the column stays readable to
+  // anything that does not know about bullets.
+  const body = [
+    ...result.data.bullets.map((line) => `- ${line.replace(/\*\*/g, '')}`),
+    ...(result.data.outlook.length ? ['', 'What to expect next:', ...result.data.outlook.map((line) => `- ${line.replace(/\*\*/g, '')}`)] : []),
+  ].join('\n');
 
   return {
     ...result.data,
+    body,
     model,
     citations: input.articles.slice(0, 8).map((article) => article.url).filter((url): url is string => Boolean(url)),
   };
 }
+
+// Exposed for tests: the refusal rules are the contract, so they are pinned directly.
+export const __testing = { violatesRules };

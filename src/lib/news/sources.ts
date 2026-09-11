@@ -282,7 +282,6 @@ export async function fetchNewYorkTimes(options: FetchOptions = {}): Promise<Raw
   const query = NEWS_QUERY_TERMS.slice(0, 6).join(' OR ');
   const url = 'https://api.nytimes.com/svc/search/v2/articlesearch.json'
     + `?q=${encodeURIComponent(query)}&begin_date=${begin}&sort=newest`
-    + `&fq=${encodeURIComponent('news_desk:("Business" "Foreign" "World")')}`
     + `&api-key=${encodeURIComponent(key)}`;
   const payload = await getJson(url, fetcher) as { response?: { docs?: Array<Record<string, unknown>> } };
   return (payload.response?.docs ?? []).flatMap((doc) => {

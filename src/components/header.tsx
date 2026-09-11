@@ -22,6 +22,7 @@ export function Header() {
         <Link href="/first-time-exporter">First-time exporter</Link>
         <Link href="/#enquire">Enquire</Link>
         <Link href="/forecast">Forecast</Link>
+        <Link href="/news">Trade watch</Link>
         <Link href="/portal">My shipments</Link>
         {user && user.role !== 'customer' && <Link href="/admin">Workspace</Link>}
         {user ? <button className="nav-button" onClick={signOut} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button> : <Link className="nav-button" href="/login">Sign in</Link>}
