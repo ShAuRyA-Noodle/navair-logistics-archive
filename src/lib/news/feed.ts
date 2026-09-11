@@ -85,13 +85,22 @@ export async function getEvent(slug: string, actorId: string | null): Promise<Ev
       [key],
     )).rows.map((row) => ({ ...row, trust: Number(row.trust), publishedAt: row.publishedAt instanceof Date ? row.publishedAt.toISOString() : String(row.publishedAt) }));
 
-    // With no actor the row policy returns nothing, which is exactly the gate. The teaser
-    // still comes through the public function so a visitor sees what they are missing.
-    const impactRows = (await db.query(
-      `SELECT corridor,severity,headline,teaser,body,actions,confidence,detail,model,generated_at AS "generatedAt"
-       FROM event_impacts WHERE event_id=(SELECT id FROM news_events WHERE slug=$1)`,
-      [key],
-    )).rows;
+    // Two ways to read the analysis. Public: through the definer function, which ignores
+    // the actor. Gated: straight off the table, where the row policy returns nothing for a
+    // visitor and everything for a signed-in account. NEWS_PUBLIC_ANALYSIS picks, so the
+    // paywall comes back with an env change rather than a migration.
+    const isPublic = process.env.NEWS_PUBLIC_ANALYSIS !== 'false';
+    const impactRows = isPublic
+      ? (await db.query(
+        `SELECT corridor,severity,headline,teaser,body,actions,confidence,detail,model,generated_at AS "generatedAt"
+         FROM public.public_event_impacts($1)`,
+        [key],
+      )).rows
+      : (await db.query(
+        `SELECT corridor,severity,headline,teaser,body,actions,confidence,detail,model,generated_at AS "generatedAt"
+         FROM event_impacts WHERE event_id=(SELECT id FROM news_events WHERE slug=$1)`,
+        [key],
+      )).rows;
 
     const impacts: ImpactDetail[] = impactRows.map((row) => {
       const detail = (row.detail ?? {}) as { bullets?: string[]; keyNumbers?: KeyNumber[]; outlook?: string[] };
@@ -128,7 +137,8 @@ export async function getEvent(slug: string, actorId: string | null): Promise<Ev
         teaser: teaser?.teaser ?? null,
         sourceCount: Number(event.sourceCount ?? 0),
       },
-      locked: impacts.length === 0 && Number(teaser?.corridor_count ?? 0) > 0,
+      // Nothing is withheld while the analysis is public, so nothing reads as locked.
+      locked: !isPublic && impacts.length === 0 && Number(teaser?.corridor_count ?? 0) > 0,
       impacts,
       sources,
     };

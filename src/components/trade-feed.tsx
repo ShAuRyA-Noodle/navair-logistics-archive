@@ -118,11 +118,11 @@ function Card({ card }: { card: FeedCard }) {
       {loading && <Loading label="Opening the briefing" />}
       {error && <Notice>{error}</Notice>}
       {detail && <>
+        {/* Only reachable when NEWS_PUBLIC_ANALYSIS is off; the demo runs it on. */}
         {detail.locked && <div className="tf-locked">
-          <p><strong>The full analysis is for account holders.</strong> You are seeing the summary above. Sign in to read what this means corridor by corridor, the figures behind it, and what to do this week.</p>
+          <p><strong>The full analysis is for account holders.</strong> You are seeing the summary above.</p>
           <div className="tf-locked-actions">
-            <Link className="button-link" href="/login">Sign in</Link>
-            <Link className="button-link tf-ghost" href="/first-time-exporter">Send an enquiry instead</Link>
+            <Link className="button-link tf-ghost" href="/first-time-exporter">Send an enquiry</Link>
           </div>
         </div>}
         {detail.impacts.map((impact) => <Impact impact={impact} key={impact.corridor} />)}
