@@ -18,5 +18,5 @@
 .process li { align-items:start; border-top:1px solid var(--line); display:grid; gap:1rem; grid-template-columns:3rem 1fr; padding-top:1rem; }
 .process li span { color:var(--green); font-size:.82rem; font-weight:900; letter-spacing:.08em; }
 .process h3 { font-size:1.1rem; }
-@media (max-width:760px) { .hero,.process { grid-template-columns:1fr; } .hero { padding-top:3.5rem; } .serviceGrid { grid-template-columns:repeat(2,1fr); } .enquiryGateway { align-items:flex-start; flex-direction:column; } }
+@media (max-width:760px) { .hero,.process { grid-template-columns:1fr; } .hero { padding-top:3.5rem; } .serviceGrid { grid-template-columns:repeat(2,1fr); } }
 @media (max-width:480px) { .home { padding-left:.75rem; padding-right:.75rem; } .serviceGrid { grid-template-columns:1fr; } .services,.process { padding:3.25rem 0; } }
