@@ -1,170 +1,23 @@
 import { config } from 'dotenv';
 import { Pool } from 'pg';
 config({ path: '.env.local', quiet: true });
-import { classify, isWorthKeeping, type ScoredItem } from '../src/lib/news/relevance';
-import { anomalousReadings, fetchFederalRegister, fetchGdelt, fetchGuardian, fetchNewsApi, fetchNewYorkTimes, readChokepoints, readingToItem } from '../src/lib/news/sources';
-import { clusterItems } from '../src/lib/news/clustering';
-import { analyseImpact, AnalysisUnavailable } from '../src/lib/news/analysis';
+import { runSweep } from '../src/lib/news/sweep';
 
-// Ingest sweep. Fetch, gate, cluster, store. Deliberately no model call: this job decides
-// what is real news, and a later step decides what it means. Safe to run repeatedly - items
-// are keyed by source and external id, events by slug.
+// Local entry point. The sweep itself lives in src/lib/news/sweep.ts so the Vercel cron
+// route runs exactly the same code path.
 
 const db = new Pool({ connectionString: process.env.ADMIN_DATABASE_URL });
-const verbose = process.argv.includes('--verbose');
-
-async function main() {
-  const started = Date.now();
-  const collected: ScoredItem[] = [];
-  const notes: string[] = [];
-
-  for (const [label, load] of [
-    ['GDELT', async () => fetchGdelt({ sinceDays: 5 })],
-    ['Guardian', async () => fetchGuardian({ sinceDays: 5 })],
-    ['New York Times', async () => fetchNewYorkTimes({ sinceDays: 7 })],
-    ['NewsAPI', async () => fetchNewsApi({ sinceDays: 5 })],
-    ['Federal Register', async () => fetchFederalRegister({ sinceDays: 21 })],
-  ] as const) {
-    try {
-      const raw = await load();
-      const scored = raw.map(classify);
-      const kept = scored.filter(isWorthKeeping);
-      collected.push(...kept);
-      notes.push(`${label}: fetched ${raw.length}, kept ${kept.length}`);
-    } catch (error) {
-      notes.push(`${label}: unavailable (${error instanceof Error ? error.message : 'unknown error'})`);
-    }
-  }
-
-  try {
-    const readings = await readChokepoints();
-    const anomalies = anomalousReadings(readings);
-    const scored = anomalies.map((reading) => classify(readingToItem(reading)));
-    collected.push(...scored);
-    notes.push(`IMF PortWatch: read ${readings.length} chokepoints, ${anomalies.length} moved beyond their baseline`);
-    if (verbose) {
-      for (const reading of readings) {
-        console.log(`   ${reading.chokepoint.padEnd(24)} recent ${String(reading.recentMean).padStart(6)} vs median ${String(reading.baselineMedian).padStart(6)} → ${(reading.changeRatio * 100).toFixed(0)}%`);
-      }
-    }
-  } catch (error) {
-    notes.push(`IMF PortWatch: unavailable (${error instanceof Error ? error.message : 'unknown error'})`);
-  }
-
-  for (const note of notes) console.log(`  ${note}`);
-  if (collected.length === 0) {
-    console.log('Nothing passed the relevance gates this sweep.');
-    return;
-  }
-
-  const clusters = clusterItems(collected);
-  const client = await db.connect();
-  let newEvents = 0;
-  let newItems = 0;
-  try {
-    await client.query('BEGIN');
-    for (const cluster of clusters) {
-      const event = (await client.query(
-        `INSERT INTO news_events(slug,title,summary,topics,regions,chokepoints,corridors,importance,item_count,first_seen,last_seen)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-         ON CONFLICT(slug) DO UPDATE SET
-           last_seen=greatest(news_events.last_seen,excluded.last_seen),
-           item_count=excluded.item_count,
-           importance=excluded.importance,
-           corridors=excluded.corridors,
-           summary=excluded.summary
-         RETURNING id,(xmax=0) AS inserted`,
-        [cluster.slug, cluster.title, cluster.summary, cluster.topics, cluster.regions,
-          cluster.chokepoints, cluster.corridors, cluster.importance, cluster.items.length,
-          cluster.firstSeen, cluster.lastSeen],
-      )).rows[0];
-      if (event.inserted) newEvents += 1;
-      for (const item of cluster.items) {
-        const stored = await client.query(
-          `INSERT INTO news_items(source_key,external_id,url,title,summary,published_at,topics,regions,chokepoints,relevance,trust,event_id,measurement)
-           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-           ON CONFLICT(source_key,external_id) DO UPDATE SET event_id=excluded.event_id
-           RETURNING (xmax=0) AS inserted`,
-          [item.sourceKey, item.externalId, item.url, item.title, item.summary, item.publishedAt,
-            item.topics, item.regions, item.chokepoints, item.relevance, item.trust, event.id,
-            item.measurement ? JSON.stringify(item.measurement) : null],
-        );
-        if (stored.rows[0]?.inserted) newItems += 1;
-      }
-    }
-    // An event nobody has written about for a fortnight is history, not intelligence.
-    const archived = await client.query(
-      "UPDATE news_events SET status='archived' WHERE status='active' AND last_seen < now() - interval '14 days'",
-    );
-    await client.query('COMMIT');
-
-    // Analysis is the only paid step, so it is rationed: important events first, one call
-    // per (event, corridor) ever, and nothing re-generated that already exists.
-    const MIN_IMPORTANCE = Number(process.env.NEWS_MIN_IMPORTANCE ?? 5);
-    const MAX_CALLS = Number(process.env.NEWS_MAX_ANALYSES ?? 60);
-    let analysed = 0;
-    let skipped = 0;
-    let consecutiveFailures = 0;
-    const failures: string[] = [];
-    // If the model keeps refusing, something is actually wrong. Stop rather than grind
-    // through every corridor collecting the same error a hundred times.
-    const FAILURE_LIMIT = 5;
-    for (const cluster of clusters) {
-      if (analysed >= MAX_CALLS) break;
-      if (cluster.importance < MIN_IMPORTANCE || cluster.corridors.length === 0) continue;
-      const stored = (await client.query('SELECT id FROM news_events WHERE slug=$1', [cluster.slug])).rows[0];
-      if (!stored) continue;
-      for (const corridor of cluster.corridors) {
-        if (analysed >= MAX_CALLS) break;
-        const existing = await client.query('SELECT 1 FROM event_impacts WHERE event_id=$1 AND corridor=$2', [stored.id, corridor]);
-        if (existing.rowCount) { skipped += 1; continue; }
-        try {
-          const analysis = await analyseImpact({
-            corridor,
-            event: { title: cluster.title, summary: cluster.summary, topics: cluster.topics, chokepoints: cluster.chokepoints, importance: cluster.importance },
-            articles: cluster.items.map((item) => ({ title: item.title, sourceKey: item.sourceKey, url: item.url, publishedAt: item.publishedAt, summary: item.summary })),
-            measurements: cluster.items.map((item) => item.measurement).filter((value): value is Record<string, unknown> => Boolean(value)),
-          });
-          await client.query(
-            `INSERT INTO event_impacts(event_id,corridor,severity,headline,teaser,body,actions,confidence,citations,model,detail)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-             ON CONFLICT(event_id,corridor) DO NOTHING`,
-            [stored.id, corridor, analysis.severity, analysis.headline, analysis.teaser, analysis.body,
-              JSON.stringify(analysis.actions), analysis.confidence, JSON.stringify(analysis.citations), analysis.model,
-              JSON.stringify({ bullets: analysis.bullets, keyNumbers: analysis.keyNumbers, outlook: analysis.outlook })],
-          );
-          analysed += 1;
-          consecutiveFailures = 0;
-        } catch (error) {
-          if (error instanceof AnalysisUnavailable) {
-            failures.push(`${corridor}: ${error.message}`);
-            consecutiveFailures += 1;
-            if (error.message.includes('not configured') || consecutiveFailures >= FAILURE_LIMIT) { analysed = MAX_CALLS; break; }
-          } else throw error;
-        }
-      }
-    }
-    if (analysed || skipped || failures.length) {
-      console.log(`  analysis: ${analysed} written, ${skipped} already cached${failures.length ? `, ${failures.length} refused` : ''}`);
-      for (const failure of failures.slice(0, 3)) console.log(`    ${failure}`);
-    }
-
-    console.log(`\n${clusters.length} event${clusters.length === 1 ? '' : 's'} in this sweep (${newEvents} new), ${collected.length} qualifying item${collected.length === 1 ? '' : 's'} (${newItems} new), ${archived.rowCount ?? 0} archived.`);
-    console.log(`Completed in ${((Date.now() - started) / 1000).toFixed(1)}s.\n`);
-    for (const cluster of clusters.slice(0, 8)) {
-      console.log(`  [${String(cluster.importance).padStart(2)}] ${cluster.title.slice(0, 84)}`);
-      console.log(`       ${cluster.items.length} item(s) · ${cluster.topics.join(', ') || 'no topic'} · corridors: ${cluster.corridors.join(', ') || 'none'}`);
-    }
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 try {
-  await main();
+  const result = await runSweep({
+    pool: db,
+    maxAnalyses: Number(process.env.NEWS_MAX_ANALYSES ?? 45),
+    minImportance: Number(process.env.NEWS_MIN_IMPORTANCE ?? 5),
+    onProgress: (line) => console.log(line),
+  });
+  console.log(`\n${result.events} events (${result.newEvents} new), ${result.items} qualifying items (${result.newItems} new), ${result.archived} archived.`);
+  console.log(`analysis: ${result.analysed} written, ${result.cached} already cached${result.refused.length ? `, ${result.refused.length} refused` : ''}`);
+  for (const line of result.refused.slice(0, 3)) console.log(`  ${line}`);
+  console.log(`Completed in ${(result.elapsedMs / 1000).toFixed(1)}s.`);
 } finally {
   await db.end();
 }
