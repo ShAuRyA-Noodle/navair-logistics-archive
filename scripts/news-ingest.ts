@@ -2,8 +2,9 @@ import { config } from 'dotenv';
 import { Pool } from 'pg';
 config({ path: '.env.local', quiet: true });
 import { classify, isWorthKeeping, type ScoredItem } from '../src/lib/news/relevance';
-import { anomalousReadings, fetchFederalRegister, fetchGdelt, readChokepoints, readingToItem } from '../src/lib/news/sources';
+import { anomalousReadings, fetchFederalRegister, fetchGdelt, fetchGuardian, fetchNewsApi, fetchNewYorkTimes, readChokepoints, readingToItem } from '../src/lib/news/sources';
 import { clusterItems } from '../src/lib/news/clustering';
+import { analyseImpact, AnalysisUnavailable } from '../src/lib/news/analysis';
 
 // Ingest sweep. Fetch, gate, cluster, store. Deliberately no model call: this job decides
 // what is real news, and a later step decides what it means. Safe to run repeatedly - items
@@ -19,6 +20,9 @@ async function main() {
 
   for (const [label, load] of [
     ['GDELT', async () => fetchGdelt({ sinceDays: 5 })],
+    ['Guardian', async () => fetchGuardian({ sinceDays: 5 })],
+    ['New York Times', async () => fetchNewYorkTimes({ sinceDays: 7 })],
+    ['NewsAPI', async () => fetchNewsApi({ sinceDays: 5 })],
     ['Federal Register', async () => fetchFederalRegister({ sinceDays: 21 })],
   ] as const) {
     try {
@@ -93,6 +97,51 @@ async function main() {
       "UPDATE news_events SET status='archived' WHERE status='active' AND last_seen < now() - interval '14 days'",
     );
     await client.query('COMMIT');
+
+    // Analysis is the only paid step, so it is rationed: important events first, one call
+    // per (event, corridor) ever, and nothing re-generated that already exists.
+    const MIN_IMPORTANCE = Number(process.env.NEWS_MIN_IMPORTANCE ?? 6);
+    const MAX_CALLS = Number(process.env.NEWS_MAX_ANALYSES ?? 12);
+    let analysed = 0;
+    let skipped = 0;
+    const failures: string[] = [];
+    for (const cluster of clusters) {
+      if (analysed >= MAX_CALLS) break;
+      if (cluster.importance < MIN_IMPORTANCE || cluster.corridors.length === 0) continue;
+      const stored = (await client.query('SELECT id FROM news_events WHERE slug=$1', [cluster.slug])).rows[0];
+      if (!stored) continue;
+      for (const corridor of cluster.corridors) {
+        if (analysed >= MAX_CALLS) break;
+        const existing = await client.query('SELECT 1 FROM event_impacts WHERE event_id=$1 AND corridor=$2', [stored.id, corridor]);
+        if (existing.rowCount) { skipped += 1; continue; }
+        try {
+          const analysis = await analyseImpact({
+            corridor,
+            event: { title: cluster.title, summary: cluster.summary, topics: cluster.topics, chokepoints: cluster.chokepoints, importance: cluster.importance },
+            articles: cluster.items.map((item) => ({ title: item.title, sourceKey: item.sourceKey, url: item.url, publishedAt: item.publishedAt, summary: item.summary })),
+            measurements: cluster.items.map((item) => item.measurement).filter((value): value is Record<string, unknown> => Boolean(value)),
+          });
+          await client.query(
+            `INSERT INTO event_impacts(event_id,corridor,severity,headline,teaser,body,actions,confidence,citations,model)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+             ON CONFLICT(event_id,corridor) DO NOTHING`,
+            [stored.id, corridor, analysis.severity, analysis.headline, analysis.teaser, analysis.body,
+              JSON.stringify(analysis.actions), analysis.confidence, JSON.stringify(analysis.citations), analysis.model],
+          );
+          analysed += 1;
+        } catch (error) {
+          if (error instanceof AnalysisUnavailable) {
+            failures.push(`${corridor}: ${error.message}`);
+            if (error.message.includes('not configured')) { analysed = MAX_CALLS; break; }
+          } else throw error;
+        }
+      }
+    }
+    if (analysed || skipped || failures.length) {
+      console.log(`  analysis: ${analysed} written, ${skipped} already cached${failures.length ? `, ${failures.length} refused` : ''}`);
+      for (const failure of failures.slice(0, 3)) console.log(`    ${failure}`);
+    }
+
     console.log(`\n${clusters.length} event${clusters.length === 1 ? '' : 's'} in this sweep (${newEvents} new), ${collected.length} qualifying item${collected.length === 1 ? '' : 's'} (${newItems} new), ${archived.rowCount ?? 0} archived.`);
     console.log(`Completed in ${((Date.now() - started) / 1000).toFixed(1)}s.\n`);
     for (const cluster of clusters.slice(0, 8)) {

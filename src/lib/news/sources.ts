@@ -235,3 +235,97 @@ export function readingToItem(reading: ChokepointReading): RawItem {
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Keyed newsrooms. Each is an editorially accountable publisher, which is why
+// they sit at trust 4 and GDELT's long tail does not. A missing key is not an
+// error: the source simply sits out the sweep.
+// ---------------------------------------------------------------------------
+
+const NEWS_QUERY_TERMS = [
+  'Strait of Hormuz', 'Suez Canal', 'Red Sea shipping', 'port strike',
+  'export ban', 'trade sanctions', 'tariff', 'container shipping', 'supply chain disruption',
+];
+
+export async function fetchGuardian(options: FetchOptions = {}): Promise<RawItem[]> {
+  const key = process.env.GUARDIAN_API_KEY;
+  if (!key) return [];
+  const fetcher = options.fetcher ?? fetch;
+  const from = new Date((options.now ?? new Date()).getTime() - (options.sinceDays ?? 5) * 86_400_000).toISOString().slice(0, 10);
+  const query = NEWS_QUERY_TERMS.map((term) => `"${term}"`).join(' OR ');
+  const url = 'https://content.guardianapis.com/search'
+    + `?q=${encodeURIComponent(query)}&from-date=${from}&order-by=newest`
+    + `&page-size=${Math.min(50, options.limit ?? 40)}&show-fields=trailText&section=business|world|environment`
+    + `&api-key=${encodeURIComponent(key)}`;
+  const payload = await getJson(url, fetcher) as { response?: { results?: Array<Record<string, unknown>> } };
+  return (payload.response?.results ?? []).flatMap((entry) => {
+    const fields = entry.fields as { trailText?: string } | undefined;
+    if (!entry.webTitle || !entry.id) return [];
+    return [{
+      sourceKey: 'guardian',
+      externalId: String(entry.id),
+      url: String(entry.webUrl ?? ''),
+      title: String(entry.webTitle),
+      summary: fields?.trailText ? fields.trailText.replace(/<[^>]+>/g, '').trim() : null,
+      publishedAt: String(entry.webPublicationDate ?? new Date().toISOString()),
+      trust: 4,
+      measurement: null,
+    } satisfies RawItem];
+  });
+}
+
+export async function fetchNewYorkTimes(options: FetchOptions = {}): Promise<RawItem[]> {
+  const key = process.env.NYT_API_KEY;
+  if (!key) return [];
+  const fetcher = options.fetcher ?? fetch;
+  const begin = new Date((options.now ?? new Date()).getTime() - (options.sinceDays ?? 7) * 86_400_000).toISOString().slice(0, 10).replace(/-/g, '');
+  const query = NEWS_QUERY_TERMS.slice(0, 6).join(' OR ');
+  const url = 'https://api.nytimes.com/svc/search/v2/articlesearch.json'
+    + `?q=${encodeURIComponent(query)}&begin_date=${begin}&sort=newest`
+    + `&fq=${encodeURIComponent('news_desk:("Business" "Foreign" "World")')}`
+    + `&api-key=${encodeURIComponent(key)}`;
+  const payload = await getJson(url, fetcher) as { response?: { docs?: Array<Record<string, unknown>> } };
+  return (payload.response?.docs ?? []).flatMap((doc) => {
+    const headline = (doc.headline as { main?: string } | undefined)?.main;
+    if (!headline || !doc.web_url) return [];
+    return [{
+      sourceKey: 'nytimes',
+      externalId: String(doc._id ?? doc.web_url),
+      url: String(doc.web_url),
+      title: headline,
+      summary: doc.abstract ? String(doc.abstract) : null,
+      publishedAt: String(doc.pub_date ?? new Date().toISOString()),
+      trust: 4,
+      measurement: null,
+    } satisfies RawItem];
+  });
+}
+
+// NewsAPI aggregates many publishers, so it is restricted to the same reputable
+// domains GDELT is, rather than trusted wholesale.
+export async function fetchNewsApi(options: FetchOptions = {}): Promise<RawItem[]> {
+  const key = process.env.NEWSAPI_KEY;
+  if (!key) return [];
+  const fetcher = options.fetcher ?? fetch;
+  const from = new Date((options.now ?? new Date()).getTime() - (options.sinceDays ?? 5) * 86_400_000).toISOString().slice(0, 10);
+  const query = `(${NEWS_QUERY_TERMS.map((term) => `"${term}"`).join(' OR ')})`;
+  const url = 'https://newsapi.org/v2/everything'
+    + `?q=${encodeURIComponent(query)}&from=${from}&language=en&sortBy=publishedAt`
+    + `&pageSize=${Math.min(100, options.limit ?? 50)}&apiKey=${encodeURIComponent(key)}`;
+  const payload = await getJson(url, fetcher) as { articles?: Array<Record<string, unknown>> };
+  return (payload.articles ?? []).flatMap((article) => {
+    const host = (() => { try { return new URL(String(article.url)).host.replace(/^www\./, '').toLocaleLowerCase(); } catch { return ''; } })();
+    const trust = GDELT_ALLOWED[host];
+    if (!trust || !article.title) return [];
+    return [{
+      sourceKey: `newsapi:${host}`,
+      externalId: String(article.url),
+      url: String(article.url),
+      title: String(article.title),
+      summary: article.description ? String(article.description) : null,
+      publishedAt: String(article.publishedAt ?? new Date().toISOString()),
+      trust,
+      measurement: null,
+    } satisfies RawItem];
+  });
+}

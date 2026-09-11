@@ -21,7 +21,9 @@
     "worker": "tsx scripts/worker.ts",
     "data:import": "tsx scripts/import-data.ts",
     "test:smoke": "tsx scripts/smoke.ts",
-    "db:export": "tsx scripts/export-db.ts"
+    "db:export": "tsx scripts/export-db.ts",
+    "news:sweep": "tsx scripts/news-ingest.ts",
+    "news:cron": "tsx scripts/news-cron.ts"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.6",
