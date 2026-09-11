@@ -1,0 +1,39 @@
+# Vercel's Hobby plan runs a cron at most once a day, which is too slow for a news feed
+# and far too slow for outbound email. GitHub Actions carries the real cadence and calls
+# the same protected endpoints; the daily Vercel cron stays as a safety net.
+name: Navair scheduled work
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # mail queue
+    - cron: '0 */3 * * *'    # news sweep
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Which job to run now
+        required: true
+        default: mail
+        type: choice
+        options: [mail, news]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Drain the mail queue
+        if: github.event.schedule == '*/10 * * * *' || github.event.inputs.job == 'mail'
+        run: |
+          code=$(curl -s -o /tmp/out.json -w '%{http_code}' --max-time 120 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.PROD_URL }}/api/cron/mail")
+          cat /tmp/out.json; echo
+          test "$code" = "200"
+
+      - name: Sweep the news sources
+        if: github.event.schedule == '0 */3 * * *' || github.event.inputs.job == 'news'
+        run: |
+          code=$(curl -s -o /tmp/out.json -w '%{http_code}' --max-time 300 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.PROD_URL }}/api/cron/news")
+          cat /tmp/out.json; echo
+          test "$code" = "200"
