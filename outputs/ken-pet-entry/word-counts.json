@@ -1,0 +1,52 @@
+[
+  {
+    "answer": "3.1",
+    "words": 10,
+    "limit": 15
+  },
+  {
+    "answer": "3.2",
+    "words": 14,
+    "limit": 15
+  },
+  {
+    "answer": "3.3",
+    "words": 13,
+    "limit": 15
+  },
+  {
+    "answer": "3.4",
+    "words": 15,
+    "limit": 15
+  },
+  {
+    "answer": "3.5",
+    "words": 14,
+    "limit": 15
+  },
+  {
+    "answer": "3.6",
+    "words": 14,
+    "limit": 15
+  },
+  {
+    "answer": "5",
+    "words": 36,
+    "limit": 40
+  },
+  {
+    "answer": "6",
+    "words": 26,
+    "limit": 30
+  },
+  {
+    "answer": "7",
+    "words": 26,
+    "limit": 30
+  },
+  {
+    "answer": "9",
+    "words": 52,
+    "limit": 60
+  }
+]
