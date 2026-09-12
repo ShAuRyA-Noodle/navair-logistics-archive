@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { COUNTRIES } from './globe/countries';
 import { api, errorMessage, RequestError } from './api';
 import { createExporterShipment, type ExporterShipmentInput } from './first-time-exporter-data';
 import { Notice } from './notice';
@@ -157,7 +159,26 @@ export function toShipmentInput(answers: Answers): ExporterShipmentInput {
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function FirstTimeExporterForm() {
+export type ExporterRouteSelection = { originCode: string; destinationCode: string };
+
+type FirstTimeExporterFormProps = {
+  embedded?: boolean;
+  onRouteChange?: (route: ExporterRouteSelection) => void;
+  onClose?: () => void;
+};
+
+export function FirstTimeExporterForm({ embedded = false, onRouteChange, onClose }: FirstTimeExporterFormProps = {}) {
+  const reducedMotion = useReducedMotion();
+  const formId = useId();
+  const [originCode, setOriginCode] = useState('');
+  const [destinationCode, setDestinationCode] = useState('');
+  const originCountry = COUNTRIES.find((country) => country.code === originCode);
+  const destinationCountry = COUNTRIES.find((country) => country.code === destinationCode);
+  const routeCallback = useRef(onRouteChange);
+  useEffect(() => { routeCallback.current = onRouteChange; }, [onRouteChange]);
+  useEffect(() => {
+    if (embedded) routeCallback.current?.({ originCode, destinationCode });
+  }, [embedded, originCode, destinationCode]);
   const [answers, setAnswers] = useState<Answers>(blankAnswers);
   const [step, setStep] = useState(0);
   const [cities, setCities] = useState<{ origins: string[]; destinations: string[] }>({ origins: [], destinations: [] });
@@ -170,24 +191,32 @@ export function FirstTimeExporterForm() {
   const heading = useRef<HTMLHeadingElement | null>(null);
 
   useEffect(() => {
+    if (embedded) return;
+    let cancelled = false;
     void api<RoutePlan>('/api/lanes/plan?origin=Mumbai&destination=Dubai')
-      .then((plan) => setCities(plan.cities))
+      .then((plan) => { if (!cancelled) setCities(plan.cities); })
       .catch(() => undefined);
-  }, []);
+    return () => { cancelled = true; };
+  }, [embedded]);
 
   const [lane, setLane] = useState<ItineraryLeg | null>(null);
+  const originLocation = embedded && originCountry ? [answers.origin.trim(), originCountry.name].filter(Boolean).join(', ') : answers.origin.trim();
+  const destinationLocation = embedded && destinationCountry ? [answers.destination.trim(), destinationCountry.name].filter(Boolean).join(', ') : answers.destination.trim();
   useEffect(() => {
     if (answers.origin.trim().length < 2 || answers.destination.trim().length < 2) { setLane(null); return; }
+    let cancelled = false;
+    setLane(null);
     const timer = setTimeout(() => {
-      void api<RoutePlan>(`/api/lanes/plan?origin=${encodeURIComponent(answers.origin.trim())}&destination=${encodeURIComponent(answers.destination.trim())}`)
+      void api<RoutePlan>(`/api/lanes/plan?origin=${encodeURIComponent(originLocation)}&destination=${encodeURIComponent(destinationLocation)}`)
         .then((plan) => {
+          if (cancelled) return;
           const options = plan.direct.length > 0 ? plan.direct : (plan.connecting[0]?.legs ?? []);
           setLane(options.find((leg) => leg.mode === answers.mode) ?? options[0] ?? null);
         })
-        .catch(() => setLane(null));
+        .catch(() => { if (!cancelled) setLane(null); });
     }, 400);
-    return () => clearTimeout(timer);
-  }, [answers.destination, answers.mode, answers.origin]);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [answers.destination, answers.mode, answers.origin, originLocation, destinationLocation]);
 
   const set = <K extends keyof Answers>(key: K, value: Answers[K]) => {
     setAnswers((current) => ({ ...current, [key]: value }));
@@ -195,26 +224,48 @@ export function FirstTimeExporterForm() {
     setFieldErrors({});
   };
 
+  const locationFields = (kind: 'origin' | 'destination') => <div className={styles.locationFields}>
+    <label className={styles.countryField}>
+      <span>{kind === 'origin' ? 'Collection country' : 'Delivery country'}</span>
+      <select value={kind === 'origin' ? originCode : destinationCode} required aria-label={kind === 'origin' ? 'Collection country' : 'Delivery country'}
+        autoComplete="off"
+        onChange={(event) => {
+          const code = event.target.value;
+          if (kind === 'origin') setOriginCode(code); else setDestinationCode(code);
+          set(kind, '');
+        }}>
+        <option value="" disabled>Select a country or territory</option>
+        {COUNTRIES.map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}
+      </select>
+    </label>
+    <label className={styles.countryField}>
+      <span>{kind === 'origin' ? 'Collection city' : 'Delivery city or port'} (optional)</span>
+      <input maxLength={120 - ((kind === 'origin' ? originCountry : destinationCountry)?.name.length ?? 0) - 2} value={answers[kind]}
+        onChange={(event) => set(kind, event.target.value)}
+        placeholder={kind === 'origin' ? 'e.g. Mumbai' : 'e.g. New York'} autoComplete="off" />
+    </label>
+  </div>;
+
   const steps = useMemo(() => [
     {
       id: 'origin',
       question: 'Where is your shipment starting?',
-      hint: 'The city it will be collected from.',
-      ready: answers.origin.trim().length >= 2,
-      body: <label className={styles.bigField}>
+      hint: embedded ? 'Choose a country. Add the collection city if you know it.' : 'The city it will be collected from.',
+      ready: embedded ? Boolean(originCountry) : answers.origin.trim().length >= 2,
+      body: embedded ? locationFields('origin') : <label className={styles.bigField}>
         <span className={styles.srOnly}>Origin city</span>
-        <input autoFocus list="exporter-origins" value={answers.origin} onChange={(event) => set('origin', event.target.value)} placeholder="Jaipur" autoComplete="address-level2" />
+        <input autoFocus={!embedded} list={`${formId}-origins`} value={answers.origin} onChange={(event) => set('origin', event.target.value)} placeholder="Jaipur" autoComplete="address-level2" />
       </label>,
     },
     {
       id: 'destination',
       question: 'Where does it need to go?',
-      hint: 'A city or port is enough.',
-      ready: answers.destination.trim().length >= 2,
-      body: <>
+      hint: embedded ? 'Choose a country. The delivery city or port is optional. Your route will light up on the map.' : 'A city or port is enough.',
+      ready: embedded ? Boolean(destinationCountry) : answers.destination.trim().length >= 2,
+      body: embedded ? locationFields('destination') : <>
         <label className={styles.bigField}>
           <span className={styles.srOnly}>Destination city</span>
-          <input autoFocus list="exporter-destinations" value={answers.destination} onChange={(event) => set('destination', event.target.value)} placeholder="Dubai" autoComplete="address-level2" />
+          <input autoFocus={!embedded} list={`${formId}-destinations`} value={answers.destination} onChange={(event) => set('destination', event.target.value)} placeholder="Dubai" autoComplete="address-level2" />
         </label>
         <RouteConditionNotice origin={answers.origin} destination={answers.destination} mode={answers.mode}
           onChooseOrigin={(city) => set('origin', city)} onChooseDestination={(city) => set('destination', city)} />
@@ -248,7 +299,7 @@ export function FirstTimeExporterForm() {
         </div>
         {answers.cargoType === 'other' && <label className={styles.reveal}>
           Tell Navair what it is, in your own words
-          <input autoFocus value={answers.goodsDescription} onChange={(event) => set('goodsDescription', event.target.value)}
+          <input autoFocus={!embedded} value={answers.goodsDescription} onChange={(event) => set('goodsDescription', event.target.value)}
             placeholder="Handmade brass lamps, boxed in pairs" />
         </label>}
       </>,
@@ -282,7 +333,7 @@ export function FirstTimeExporterForm() {
             <label>Length<input inputMode="decimal" value={answers.length} onChange={(event) => set('length', event.target.value)} placeholder="L" /></label>
             <label>Width<input inputMode="decimal" value={answers.width} onChange={(event) => set('width', event.target.value)} placeholder="W" /></label>
             <label>Height<input inputMode="decimal" value={answers.height} onChange={(event) => set('height', event.target.value)} placeholder="H" /></label>
-            <label>Measured in
+            <label className={styles.dimensionUnits}>Measured in
               <select value={answers.dimensionUnit} onChange={(event) => set('dimensionUnit', event.target.value as 'cm' | 'in')}>
                 <option value="cm">centimetres</option>
                 <option value="in">inches</option>
@@ -310,7 +361,7 @@ export function FirstTimeExporterForm() {
         </div>
         {answers.handling === 'other' && <label className={styles.reveal}>
           What kind of care does it need?
-          <input autoFocus value={answers.handlingNote} onChange={(event) => set('handlingNote', event.target.value)}
+          <input autoFocus={!embedded} value={answers.handlingNote} onChange={(event) => set('handlingNote', event.target.value)}
             placeholder="Fragile glass, must stay upright" />
         </label>}
       </>,
@@ -352,7 +403,7 @@ export function FirstTimeExporterForm() {
       ready: answers.name.trim().length >= 2 && EMAIL.test(answers.email.trim()),
       body: <div className={styles.contactFields}>
         <label>Your name
-          <input autoFocus value={answers.name} onChange={(event) => set('name', event.target.value)} autoComplete="name" placeholder="Shaurya Punj" />
+          <input autoFocus={!embedded} value={answers.name} onChange={(event) => set('name', event.target.value)} autoComplete="name" placeholder="Shaurya Punj" />
           {fieldErrors.name?.[0] && <span className={styles.fieldError}>{fieldErrors.name[0]}</span>}
         </label>
         <label>Email
@@ -367,7 +418,7 @@ export function FirstTimeExporterForm() {
         </label>
       </div>,
     },
-  ], [answers, fieldErrors]);
+  ], [answers, fieldErrors, embedded, originCode, destinationCode, lane]);
 
   const current = steps[Math.min(step, steps.length - 1)];
   const last = step === steps.length - 1;
@@ -376,9 +427,17 @@ export function FirstTimeExporterForm() {
     setStep((value) => Math.min(steps.length - 1, value + 1));
   }
 
-  useEffect(() => { heading.current?.focus(); }, [step]);
+  useEffect(() => {
+    if (!embedded) heading.current?.focus({ preventScroll: true });
+  }, [step, embedded]);
 
   async function submit() {
+    if (submitting || !current.ready) return;
+    if (embedded && (!originCountry || !destinationCountry)) {
+      setError('Choose both countries before sending.');
+      setStep(!originCountry ? 0 : 1);
+      return;
+    }
     setError(null);
     setFieldErrors({});
     const shipment = createExporterShipment(toShipmentInput(answers));
@@ -386,8 +445,8 @@ export function FirstTimeExporterForm() {
       name: answers.name.trim(),
       email: answers.email.trim(),
       ...(answers.phone.trim() ? { phone: answers.phone.trim() } : {}),
-      origin: answers.origin.trim(),
-      destination: answers.destination.trim(),
+      origin: originLocation,
+      destination: destinationLocation,
       mode: answers.mode,
       description: describeGoods(answers),
       shipment,
@@ -403,6 +462,8 @@ export function FirstTimeExporterForm() {
       });
       setReference(result.reference);
       setAnswers(blankAnswers);
+      setOriginCode('');
+      setDestinationCode('');
       setStep(0);
       intent.current = { fingerprint: '', key: '' };
     } catch (reason) {
@@ -414,15 +475,16 @@ export function FirstTimeExporterForm() {
   }
 
   if (reference) {
-    return <section className={styles.success} aria-labelledby="exporter-confirmation">
+    return <section className={`${styles.success} ${embedded ? styles.embedded : ''}`} aria-labelledby={`${formId}-confirmation`}>
       <p className="eyebrow">Sent</p>
-      <h2 id="exporter-confirmation">Navair has your enquiry.</h2>
+      <h2 id={`${formId}-confirmation`}>Navair has your enquiry.</h2>
       <p>Your reference is <strong>{reference}</strong>. A confirmation is on its way to your email, and the team replies from there.</p>
       <button type="button" onClick={() => setReference(null)}>Send another enquiry</button>
     </section>;
   }
 
-  return <section className={styles.wizard} aria-live="polite">
+  return <section className={`${styles.wizard} ${embedded ? styles.embedded : ''}`} aria-label="Shipment enquiry">
+    {embedded && <div className={styles.embeddedHeader}><span>YOUR NEXT MOVE</span>{onClose && <button type="button" onClick={onClose} aria-label="Close shipment enquiry">Close <span aria-hidden="true">×</span></button>}</div>}
     <div className={styles.progress}>
       <div className={styles.progressTrack}><div className={styles.progressFill} style={{ width: `${((step + 1) / steps.length) * 100}%` }} /></div>
       <p className={styles.progressLabel}>Question {step + 1} of {steps.length} · about {Math.max(1, steps.length - step) * 10} seconds left</p>
@@ -430,10 +492,15 @@ export function FirstTimeExporterForm() {
 
     {error && <Notice>{error}</Notice>}
 
-    <div className={styles.stepBody} key={current.id}>
+    <AnimatePresence mode="wait" initial={false}>
+    <motion.div className={styles.stepBody} key={current.id}
+      initial={{ opacity: 0, y: reducedMotion ? 0 : 12 }}
+      animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reducedMotion ? 0 : -8 }}
+      transition={{ duration: reducedMotion ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
+      onAnimationComplete={() => heading.current?.focus({ preventScroll: true })}>
       <h2 tabIndex={-1} ref={heading} className={styles.question}>{current.question}</h2>
       <p className={styles.hint}>{current.hint}</p>
-      <form onSubmit={(event) => { event.preventDefault(); if (last) void submit(); else if (current.ready) advance(); }}>
+      <form onSubmit={(event) => { event.preventDefault(); if (!current.ready || submitting) return; if (last) void submit(); else advance(); }}>
         {current.body}
         <input className="honeypot" aria-hidden="true" tabIndex={-1} name="website" value={website} onChange={(event) => setWebsite(event.target.value)} autoComplete="off" />
         <div className={styles.actions}>
@@ -443,15 +510,16 @@ export function FirstTimeExporterForm() {
             : <button type="submit" disabled={!current.ready}>Continue</button>}
         </div>
       </form>
-    </div>
+    </motion.div>
+    </AnimatePresence>
 
-    <datalist id="exporter-origins">{cities.origins.map((city) => <option key={city} value={city} />)}</datalist>
-    <datalist id="exporter-destinations">{cities.destinations.map((city) => <option key={city} value={city} />)}</datalist>
+    <datalist id={`${formId}-origins`}>{cities.origins.map((city) => <option key={city} value={city} />)}</datalist>
+    <datalist id={`${formId}-destinations`}>{cities.destinations.map((city) => <option key={city} value={city} />)}</datalist>
 
     <details className={styles.review}>
       <summary>See what you have answered so far</summary>
       <dl>
-        <div><dt>Route</dt><dd>{answers.origin || 'not set'} → {answers.destination || 'not set'}</dd></div>
+        <div><dt>Route</dt><dd>{originLocation || 'not set'} → {destinationLocation || 'not set'}</dd></div>
         <div><dt>Sent by</dt><dd>{MODES.find(([value]) => value === answers.mode)?.[1]}</dd></div>
         <div><dt>Goods</dt><dd>{answers.cargoType === 'other' && answers.goodsDescription.trim() ? answers.goodsDescription.trim() : GOODS.find(([value]) => value === answers.cargoType)?.[1]}, {SIZES.find(([value]) => value === answers.size)?.[1]?.toLowerCase()}</dd></div>
         <div><dt>Special care</dt><dd>{answers.handling === 'other' && answers.handlingNote.trim() ? answers.handlingNote.trim() : HANDLING.find(([value]) => value === answers.handling)?.[1]}</dd></div>
