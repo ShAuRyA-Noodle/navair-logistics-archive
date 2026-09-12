@@ -4,3 +4,5 @@
 @media (max-width:480px) { .brand { font-size:.85rem; } nav { gap:.45rem; } nav a { font-size:.78rem; } .nav-button { padding:.4rem .5rem; } .page-shell { padding-left:.75rem; padding-right:.75rem; } .card { padding:1rem; } }
 .honeypot { height:1px; left:-10000px; opacity:0; overflow:hidden; position:absolute; top:auto; width:1px; }
 .pager { align-items:center; display:flex; gap:.75rem; justify-content:flex-end; margin-top:1rem; } .pager span { color:var(--muted); font-size:.82rem; } .pager button { font-size:.8rem; padding:.45rem .7rem; } .private-panel { border-color:#d9cda8; } .finance-summary { display:flex; flex-wrap:wrap; gap:1.5rem; margin:1rem 0; } .cost-forecast { border-top:1px solid var(--line); margin-top:1rem; padding-top:1rem; } .cost-forecast ul { margin:.5rem 0 0; padding-left:1.2rem; }
+
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } }

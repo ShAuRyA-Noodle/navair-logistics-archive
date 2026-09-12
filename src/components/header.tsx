@@ -1,11 +1,18 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import type { Session } from './types';
 
 export function Header() {
+  const pathname = usePathname();
+  if (pathname === '/') return null;
+  return <WorkspaceHeader />;
+}
+
+function WorkspaceHeader() {
   const [session, setSession] = useState<Session | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   useEffect(() => { void api<Session>('/api/auth/session').then(setSession).catch(() => setSession(null)); }, []);
