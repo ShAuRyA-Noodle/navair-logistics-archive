@@ -30,7 +30,7 @@ export function RouteConditionNotice({ origin, destination, mode, onChooseOrigin
       } catch (error) {
         if (!(error instanceof DOMException && error.name === 'AbortError')) setUnavailable(true);
       } finally { if (!controller.signal.aborted) setLoading(false); }
-    }, 300);
+    }, 550);
     return () => { window.clearTimeout(timeout); controller.abort(); };
   }, [destination, mode, origin, ready]);
 
@@ -39,7 +39,20 @@ export function RouteConditionNotice({ origin, destination, mode, onChooseOrigin
   if (dismissedQuery === query) return null;
   if (unavailable) return <p className={styles.status} aria-live="polite">Route conditions are temporarily unavailable. You can still submit your enquiry.</p>;
   if (!result) return null;
-  if (result.match === 'unknown_location') return <div className={styles.status} aria-live="polite"><p>We could not identify this city. Check the spelling or choose a suggestion; you can still submit your enquiry.</p><CitySuggestions cities={result.suggestions.origin} onChoose={onChooseOrigin} /><CitySuggestions cities={result.suggestions.destination} onChoose={onChooseDestination} /></div>;
+  if (result.match === 'unknown_location') {
+    // Typing "hong" is not a mistake, it is half of "Hong Kong". While a suggestion still
+    // begins with what has been typed, the person is mid-word: offer the completion quietly
+    // rather than telling them the city cannot be found.
+    const typedOrigin = origin.trim().toLocaleLowerCase();
+    const typedDestination = destination.trim().toLocaleLowerCase();
+    const completing = result.suggestions.origin.some((city) => city.toLocaleLowerCase().startsWith(typedOrigin))
+      || result.suggestions.destination.some((city) => city.toLocaleLowerCase().startsWith(typedDestination));
+    return <div className={styles.status} aria-live="polite">
+      <p>{completing ? 'Did you mean:' : 'We could not find that city in Navair\'s network. Check the spelling or pick one below; you can still send your enquiry.'}</p>
+      <CitySuggestions cities={result.suggestions.origin} onChoose={onChooseOrigin} />
+      <CitySuggestions cities={result.suggestions.destination} onChoose={onChooseDestination} />
+    </div>;
+  }
   if (result.match === 'mode_required') return <p className={styles.status} aria-live="polite">Choose a preferred service to check route history. You can still submit your enquiry.</p>;
   if (result.match === 'not_supported') return <p className={styles.status} aria-live="polite">This route is not currently handled. You can still send your enquiry; Navair will review availability and possible alternatives. Service is not confirmed.</p>;
   if (result.match === 'service_unavailable' || !result.route || !result.radar) return <p className={styles.status} aria-live="polite">We need to confirm availability for this route. Send your enquiry and Navair will review options or alternatives.</p>;
