@@ -37,15 +37,15 @@ const schema = z.object({
   teaser: z.string().trim().min(20).max(200),
   bullets: z.array(z.string().trim().min(10).max(220)).min(2).max(6),
   keyNumbers: z.array(z.object({
-    label: z.string().trim().min(2).max(40),
-    value: z.string().trim().min(1).max(30),
-    source: z.string().trim().min(2).max(40),
+    label: z.string().trim().min(2).max(80),
+    value: z.string().trim().min(1).max(40),
+    source: z.string().trim().min(2).max(80),
   })).max(4).default([]),
   outlook: z.array(z.string().trim().min(10).max(220)).max(3).default([]),
   actions: z.array(z.string().trim().min(8).max(200)).max(4).default([]),
   confidence: z.enum(['low', 'medium', 'high']),
 });
-export type Analysis = z.infer<typeof schema> & { model: string; citations: string[]; body: string };
+export type Analysis = z.infer<typeof schema> & { model: string; citations: string[]; body: string; corridor?: string };
 
 export class AnalysisUnavailable extends Error {}
 
@@ -114,9 +114,17 @@ const FORBIDDEN = [
   /(costs?|prices?|rates?)\s+(will|may|could|should|are likely to)\s+(rise|fall|increase|drop|climb|ease)/i,
   // The same claim with the verb in front: "could ease costs", "may raise prices".
   /(will|may|could|should|likely to)\s+(ease|raise|lift|cut|reduce|increase|lower|push up|drive up)\s+(the\s+)?(costs?|prices?|rates?|charges?)/i,
-  // A commodity move tied to what carriage costs is a freight claim however it is worded.
-  /(lower|higher|rising|falling|cheaper|costlier)\s+\w*\s*(prices?|costs?)[^.]{0,50}\b(freight|shipping|carriage|haulage|cargo|container|vessel)\b/i,
-  /\b(freight|shipping|carriage|haulage|cargo)\b[^.]{0,50}(lower|higher|rising|falling|cheaper|costlier)\s+\w*\s*(prices?|costs?|rates?)/i,
+  // A claim about what carriage costs. The cost word has to be attached to the carriage:
+  // "freight costs", "shipping rates". Naming a commodity move in the same sentence as the
+  // word freight is not a price claim - "rising oil prices may tighten air-freight capacity"
+  // is about space on aircraft, and refusing it taught the model to avoid the real subject.
+  // The test that separates the two: a cost word standing near a carriage word. "More fuel
+  // costs for shipping" is a price claim; "tighten air-freight capacity" is not, because
+  // capacity is not a cost. Direction alone is not enough, and carriage alone is not either.
+  /\b(more|less|extra|added|higher|lower|rising|falling|increased|reduced|cheaper|costlier)\b[^.]{0,40}\b(costs?|rates?|charges?)\b[^.]{0,25}\b(freight|shipping|carriage|haulage|cargo|transport|container|ocean|air)\b/i,
+  /\b(freight|shipping|carriage|haulage|cargo|transport|container|ocean|air)\b[^.]{0,25}\b(costs?|rates?|charges?)\b[^.]{0,40}\b(more|less|extra|higher|lower|rising|falling|increase|decrease|rise|fall|climb)\b/i,
+  // Third ordering: direction, then the carriage, then the cost - "more freight costs".
+  /\b(more|less|extra|added|higher|lower|rising|falling|increased|reduced|cheaper|costlier)\b[^.]{0,40}\b(freight|shipping|carriage|haulage|cargo|transport|container|ocean|air)\b[^.]{0,15}\b(costs?|rates?|charges?)\b/i,
 ];
 
 // The highlight markers are stripped before checking. Leaving them in let "Lower **oil
@@ -156,6 +164,92 @@ function buildPrompt(input: AnalysisInput, contextLines: string[]): string {
 
 // Groq occasionally returns an empty or half-finished generation and rejects its own JSON.
 // It is transient, so one retry recovers it; two failures in a row mean something real.
+// One call, every affected corridor. Analysing corridors one at a time meant an event
+// touching six of them cost six calls, and at a free-tier ceiling of 8,000 tokens a minute
+// that is the difference between the whole feed being analysed and a handful of it. The
+// model sees all the corridors at once and answers for each, which also makes the answers
+// consistent with one another.
+const multiSchema = z.object({
+  keyNumbers: schema.shape.keyNumbers,
+  corridors: z.array(z.object({
+    corridor: z.string().trim().min(3).max(40),
+    severity: schema.shape.severity,
+    headline: schema.shape.headline,
+    teaser: schema.shape.teaser,
+    bullets: schema.shape.bullets,
+    outlook: schema.shape.outlook,
+    actions: schema.shape.actions,
+    confidence: schema.shape.confidence,
+  })).min(1).max(6),
+});
+
+export async function analyseEventCorridors(
+  input: Omit<AnalysisInput, 'corridor'> & { corridors: string[] },
+  attempt = 0,
+): Promise<Analysis[]> {
+  const key = process.env.GROQ_API_KEY;
+  if (!key) throw new AnalysisUnavailable('GROQ_API_KEY is not configured, so no analysis was generated.');
+  const model = process.env.GROQ_MODEL || DEFAULT_MODEL;
+  const corridors = input.corridors.slice(0, 6);
+  const context = await corridorContext(corridors[0] ?? 'gulf-sea');
+  const listed = corridors.map((corridor) => `- ${corridor} (${corridorPhrase(corridor)})`).join('\n');
+  const prompt = `${buildPrompt({ ...input, corridor: corridors[0] ?? '' }, describeContext(context))}\n\n`
+    + `Answer for EACH of these corridors separately, using the exact corridor id given:\n${listed}\n`
+    + 'Corridors differ: a sea chokepoint may not touch air freight at all. Say "none" where that is the honest answer.';
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let raw: string;
+  try {
+    const response = await fetch(GROQ_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model, temperature: 0.2, max_completion_tokens: 8000, reasoning_effort: 'medium',
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: `${SYSTEM}\n\nThis time answer for several corridors at once. Return {"keyNumbers":[...],"corridors":[{"corridor":"<exact id>","severity":...,"headline":...,"teaser":...,"bullets":[...],"outlook":[...],"actions":[...],"confidence":...}]}` },
+          { role: 'user', content: prompt },
+        ],
+      }),
+    });
+    if (response.status === 429 || response.status >= 500) {
+      if (attempt < 2) { clearTimeout(timer); await sleep(25_000 * (attempt + 1)); return analyseEventCorridors(input, attempt + 1); }
+      throw new AnalysisUnavailable('Groq is rate limiting briefings; the next sweep continues where this one stopped.');
+    }
+    if (!response.ok) throw new AnalysisUnavailable(`Groq responded ${response.status}: ${(await response.text()).slice(0, 160)}`);
+    raw = ((await response.json()) as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content ?? '';
+  } catch (error) {
+    if (error instanceof AnalysisUnavailable) throw error;
+    if (attempt < 1) { await sleep(3000); return analyseEventCorridors(input, attempt + 1); }
+    throw new AnalysisUnavailable(error instanceof Error ? error.message : 'Groq call failed.');
+  } finally {
+    clearTimeout(timer);
+  }
+
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { throw new AnalysisUnavailable('The model did not return usable JSON.'); }
+  const result = multiSchema.safeParse(parsed);
+  if (!result.success) throw new AnalysisUnavailable(`The answer did not fit the required shape: ${result.error.issues[0]?.message ?? 'unknown'}`);
+
+  const citations = input.articles.slice(0, 8).map((article) => article.url).filter((url): url is string => Boolean(url));
+  // A breach in one corridor discards that corridor, not the whole event.
+  return result.data.corridors.flatMap((entry) => {
+    const flat = [entry.headline, entry.teaser, ...entry.bullets, ...entry.outlook, ...entry.actions].join(' ');
+    if (violatesRules(flat)) return [];
+    if (!corridors.includes(entry.corridor)) return [];
+    return [{
+      ...entry,
+      keyNumbers: result.data.keyNumbers,
+      model,
+      citations,
+      body: [...entry.bullets.map((line) => `- ${line.replace(/\*\*/g, '')}`),
+        ...(entry.outlook.length ? ['', 'What to expect next:', ...entry.outlook.map((line) => `- ${line.replace(/\*\*/g, '')}`)] : [])].join('\n'),
+    } satisfies Analysis];
+  });
+}
+
 export async function analyseImpact(input: AnalysisInput, attempt = 0): Promise<Analysis> {
   try {
     return await requestAnalysis(input);

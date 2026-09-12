@@ -164,3 +164,17 @@ describe('the India note guard', () => {
     expect(auditNote('Customs clearance at **Nhava Sheva** could take longer while checks are tightened.')).toBeNull();
   });
 });
+
+describe('the guard tells a capacity claim from a price claim', () => {
+  it('allows a commodity move explained through capacity, which is the real subject', () => {
+    // Refusing this taught the model to avoid writing about the actual story.
+    expect(auditNote('Rising oil prices and Red Sea tensions may tighten air-freight capacity.')).toBeNull();
+    expect(auditNote('Higher crude prices are squeezing airline schedules on Gulf routes.')).toBeNull();
+  });
+
+  it('still refuses a claim about what carriage costs', () => {
+    expect(auditNote('Higher freight rates are expected on this lane.')).not.toBeNull();
+    expect(auditNote('Ocean freight costs will rise next month.')).not.toBeNull();
+    expect(auditNote('Rising shipping costs hit exporters.')).not.toBeNull();
+  });
+});

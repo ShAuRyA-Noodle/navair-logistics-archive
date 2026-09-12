@@ -2,7 +2,7 @@ import type { Pool } from 'pg';
 import { classify, isWorthKeeping, type ScoredItem } from './relevance';
 import { anomalousReadings, fetchFederalRegister, fetchGdelt, fetchGuardian, fetchIndiaTrade, fetchNewsApi, fetchNewYorkTimes, readChokepoints, readingToItem } from './sources';
 import { clusterItems } from './clustering';
-import { analyseImpact, AnalysisUnavailable, summariseForIndia } from './analysis';
+import { analyseEventCorridors, AnalysisUnavailable, summariseForIndia } from './analysis';
 
 // One sweep: fetch, gate, cluster, store, then analyse a bounded batch.
 //
@@ -165,35 +165,40 @@ export async function runSweep(options: SweepOptions): Promise<SweepResult> {
       if (cluster.importance < minImportance || cluster.corridors.length === 0) continue;
       const stored = (await client.query('SELECT id FROM news_events WHERE slug=$1', [cluster.slug])).rows[0];
       if (!stored) continue;
-      for (const corridor of cluster.corridors) {
-        if (analysed >= maxAnalyses || Date.now() - started > budgetMs) break;
-        const existing = await client.query('SELECT 1 FROM event_impacts WHERE event_id=$1 AND corridor=$2', [stored.id, corridor]);
-        if (existing.rowCount) { cached += 1; continue; }
-        try {
-          const analysis = await analyseImpact({
-            corridor,
-            event: { title: cluster.title, summary: cluster.summary, topics: cluster.topics, chokepoints: cluster.chokepoints, importance: cluster.importance },
-            articles: cluster.items.map((item) => ({ title: item.title, sourceKey: item.sourceKey, url: item.url, publishedAt: item.publishedAt, summary: item.summary })),
-            measurements: cluster.items.map((item) => item.measurement).filter((value): value is Record<string, unknown> => Boolean(value)),
-          });
+
+      // Only the corridors that do not already have a briefing, and all of them in one call.
+      const done = (await client.query('SELECT corridor FROM event_impacts WHERE event_id=$1', [stored.id])).rows.map((row) => row.corridor as string);
+      const todo = cluster.corridors.filter((corridor) => !done.includes(corridor));
+      cached += done.length;
+      if (todo.length === 0) continue;
+
+      try {
+        const written = await analyseEventCorridors({
+          corridors: todo,
+          event: { title: cluster.title, summary: cluster.summary, topics: cluster.topics, chokepoints: cluster.chokepoints, importance: cluster.importance },
+          articles: cluster.items.map((item) => ({ title: item.title, sourceKey: item.sourceKey, url: item.url, publishedAt: item.publishedAt, summary: item.summary })),
+          measurements: cluster.items.map((item) => item.measurement).filter((value): value is Record<string, unknown> => Boolean(value)),
+        });
+        for (const analysis of written) {
           await client.query(
             `INSERT INTO event_impacts(event_id,corridor,severity,headline,teaser,body,actions,confidence,citations,model,detail)
              VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
              ON CONFLICT(event_id,corridor) DO NOTHING`,
-            [stored.id, corridor, analysis.severity, analysis.headline, analysis.teaser, analysis.body,
+            [stored.id, analysis.corridor, analysis.severity, analysis.headline, analysis.teaser, analysis.body,
               JSON.stringify(analysis.actions), analysis.confidence, JSON.stringify(analysis.citations), analysis.model,
               JSON.stringify({ bullets: analysis.bullets, keyNumbers: analysis.keyNumbers, outlook: analysis.outlook })],
           );
-          analysed += 1;
-          consecutiveFailures = 0;
-          log(`  analysed ${corridor} · ${cluster.title.slice(0, 50)}`);
-        } catch (error) {
-          if (!(error instanceof AnalysisUnavailable)) throw error;
-          refused.push(`${corridor}: ${error.message}`);
-          consecutiveFailures += 1;
-          // Repeated refusals mean something real is wrong; stop rather than grind on.
-          if (error.message.includes('not configured') || consecutiveFailures >= FAILURE_LIMIT) { analysed = maxAnalyses; break; }
         }
+        analysed += written.length;
+        consecutiveFailures = 0;
+        log(`  analysed ${written.length}/${todo.length} corridors · ${cluster.title.slice(0, 48)}`);
+        // The free allowance is per minute; pacing beats collecting 429s.
+        await new Promise((resolve) => setTimeout(resolve, Number(process.env.NEWS_ANALYSIS_DELAY_MS ?? 8000)));
+      } catch (error) {
+        if (!(error instanceof AnalysisUnavailable)) throw error;
+        refused.push(`${cluster.slug.slice(0, 40)}: ${error.message}`);
+        consecutiveFailures += 1;
+        if (error.message.includes('not configured') || consecutiveFailures >= FAILURE_LIMIT) break;
       }
     }
   } finally {
