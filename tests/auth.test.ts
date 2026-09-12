@@ -6,6 +6,19 @@ describe('authentication boundaries',()=>{
   vi.stubEnv('APP_URL','http://127.0.0.1:3000');
   expect(()=>assertSameOrigin(new Request('http://127.0.0.1:3000/api/enquiries',{method:'POST',headers:{origin:'https://attacker.example'}}))).toThrow();
  });
+ it('accepts a request from whichever alias served the page, not only APP_URL',()=>{
+  // Vercel gives one deployment several hostnames; a visitor on any of them is on-site.
+  vi.stubEnv('APP_URL','https://navair-logistics-shauryapunj404-4961s-projects.vercel.app');
+  const request=new Request('https://navair-logistics-one.vercel.app/api/enquiries',{method:'POST',headers:{
+   origin:'https://navair-logistics-one.vercel.app',host:'navair-logistics-one.vercel.app','x-forwarded-host':'navair-logistics-one.vercel.app','x-forwarded-proto':'https'}});
+  expect(()=>assertSameOrigin(request)).not.toThrow();
+ });
+ it('still rejects a cross-site origin that names a different host from the one serving',()=>{
+  vi.stubEnv('APP_URL','https://navair-logistics-shauryapunj404-4961s-projects.vercel.app');
+  const request=new Request('https://navair-logistics-one.vercel.app/api/enquiries',{method:'POST',headers:{
+   origin:'https://attacker.example','x-forwarded-host':'navair-logistics-one.vercel.app','x-forwarded-proto':'https'}});
+  expect(()=>assertSameOrigin(request)).toThrow();
+ });
  it('rejects an absent origin on browser mutation routes',()=>{
   expect(()=>assertSameOrigin(new Request('http://127.0.0.1:3000/api/enquiries',{method:'POST'}))).toThrow();
  });

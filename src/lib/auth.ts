@@ -6,8 +6,16 @@ export const SESSION_COOKIE='navair_session';
 export function hashToken(token:string) { return createHash('sha256').update(token).digest('hex'); }
 export function demoEnabled() { return process.env.LOCAL_DEMO_MODE==='true' && process.env.NODE_ENV!=='production'; }
 export function appOrigin() { return new URL(process.env.APP_URL ?? 'http://127.0.0.1:3000').origin; }
+// The page may be served from any of the host's aliases (Vercel hands out several for one
+// deployment), so a same-site request is one whose Origin matches the host it was sent to.
+// APP_URL stays accepted for the canonical domain. Origin is browser-set and unforgeable
+// from a page, which is what this check relies on.
 export function assertSameOrigin(request:Request) {
-  if(request.headers.get('origin')!==appOrigin()) throw new AppError(403,'INVALID_ORIGIN','This request must come from the Navair website.');
+  const origin=request.headers.get('origin');
+  const forwardedHost=request.headers.get('x-forwarded-host')??request.headers.get('host');
+  const proto=request.headers.get('x-forwarded-proto')??new URL(request.url).protocol.replace(':','');
+  const served=forwardedHost?`${proto}://${forwardedHost.split(',')[0].trim()}`:new URL(request.url).origin;
+  if(!origin||(origin!==appOrigin()&&origin!==served)) throw new AppError(403,'INVALID_ORIGIN','This request must come from the Navair website.');
 }
 export function assertLocalDemo(request:Request) {
   const url=new URL(request.url);
