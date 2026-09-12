@@ -371,3 +371,101 @@ export async function fetchNewsApi(options: FetchOptions = {}): Promise<RawItem[
     } satisfies RawItem];
   });
 }
+
+// ---------------------------------------------------------------------------
+// Trade press and official gazettes over RSS. No keys, no quotas, and these are
+// the outlets that report a berth closure or a war-risk notice days before the
+// general press does. Trust is declared per feed: an official gazette is a 5,
+// an established trade title a 4, a smaller aggregator a 3.
+// ---------------------------------------------------------------------------
+
+type Feed = { key: string; url: string; trust: number; hints?: Topic[] };
+
+const FEEDS: Feed[] = [
+  // Official
+  { key: 'gov.uk', url: 'https://www.gov.uk/search/all.atom?keywords=trade+sanctions', trust: 5, hints: ['sanctions'] },
+  // Maritime and freight trade press
+  { key: 'gcaptain', url: 'https://gcaptain.com/feed/', trust: 4 },
+  { key: 'theloadstar', url: 'https://theloadstar.com/feed/', trust: 4 },
+  { key: 'splash247', url: 'https://splash247.com/feed/', trust: 4 },
+  { key: 'maritime-executive', url: 'https://maritime-executive.com/articles.rss', trust: 4 },
+  { key: 'seatrade-maritime', url: 'https://www.seatrade-maritime.com/rss.xml', trust: 4 },
+  { key: 'freightwaves', url: 'https://www.freightwaves.com/news/feed', trust: 4 },
+  { key: 'container-news', url: 'https://container-news.com/feed/', trust: 3 },
+  { key: 'hellenicshipping', url: 'https://www.hellenicshippingnews.com/feed/', trust: 3 },
+  // Air cargo, which the general news query almost never surfaces
+  { key: 'aircargonews', url: 'https://www.aircargonews.net/feed/', trust: 4 },
+  { key: 'stattimes-air', url: 'https://www.stattimes.com/rss/air-cargo', trust: 3 },
+];
+
+function decodeEntities(text: string): string {
+  return text
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&amp;/g, '&');
+}
+
+function tagText(block: string, tag: string): string | null {
+  const match = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i').exec(block);
+  return match ? decodeEntities(match[1]).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : null;
+}
+
+function entryLink(block: string): string | null {
+  // RSS puts the URL in <link>text</link>; Atom puts it in an href attribute.
+  const href = /<link[^>]*href="([^"]+)"/i.exec(block);
+  if (href) return href[1];
+  const plain = tagText(block, 'link');
+  return plain && /^https?:/i.test(plain) ? plain : null;
+}
+
+async function readFeed(feed: Feed, options: FetchOptions): Promise<RawItem[]> {
+  const fetcher = options.fetcher ?? fetch;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let xml: string;
+  try {
+    const response = await fetcher(feed.url, {
+      headers: { Accept: 'application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.8', 'User-Agent': USER_AGENT },
+      signal: controller.signal, redirect: 'follow',
+    });
+    if (!response.ok) throw new Error(`${feed.key} responded ${response.status}`);
+    xml = await response.text();
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const cutoff = Date.now() - (options.sinceDays ?? 7) * 86_400_000;
+  const blocks = xml.split(/<(?:item|entry)[\s>]/i).slice(1).slice(0, options.limit ?? 40);
+  return blocks.flatMap((block) => {
+    const title = tagText(block, 'title');
+    const url = entryLink(block);
+    if (!title || !url) return [];
+    const stamp = tagText(block, 'pubDate') ?? tagText(block, 'published') ?? tagText(block, 'updated') ?? tagText(block, 'dc:date');
+    const published = stamp ? new Date(stamp) : new Date();
+    if (Number.isNaN(published.getTime()) || published.getTime() < cutoff) return [];
+    const summary = tagText(block, 'description') ?? tagText(block, 'summary') ?? tagText(block, 'content');
+    return [{
+      sourceKey: feed.key,
+      externalId: url,
+      url,
+      title,
+      summary: summary ? summary.slice(0, 600) : null,
+      publishedAt: published.toISOString(),
+      trust: feed.trust,
+      measurement: null,
+      ...(feed.hints ? { topicHints: feed.hints } : {}),
+    } satisfies RawItem];
+  });
+}
+
+export async function fetchTradePress(options: FetchOptions = {}): Promise<RawItem[]> {
+  // One slow or broken feed must never cost us the other ten.
+  const results = await Promise.allSettled(FEEDS.map((feed) => readFeed(feed, options)));
+  return results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
+}
+
+export function tradePressFeedCount(): number {
+  return FEEDS.length;
+}

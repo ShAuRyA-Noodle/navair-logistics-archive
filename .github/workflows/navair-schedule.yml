@@ -1,27 +1,40 @@
-# Vercel's Hobby plan runs a cron at most once a day, which is too slow for a news feed
-# and far too slow for outbound email. GitHub Actions carries the real cadence and calls
-# the same protected endpoints; the daily Vercel cron stays as a safety net.
+# Scheduled work for Navair.
+#
+# The sweep runs here rather than on Vercel because a serverless function is killed at the
+# wall clock - 300 seconds - while the analysis backlog is hundreds of model calls that are
+# rate limited to a few a minute. A GitHub runner will sit there for hours, so the sweep can
+# simply take the time it needs. It writes straight to the production database.
+#
+# The mail queue stays an HTTP call: draining it is quick, and the endpoint already exists.
 name: Navair scheduled work
 
 on:
   schedule:
-    - cron: '*/10 * * * *'   # mail queue
-    - cron: '0 */3 * * *'    # news sweep
+    - cron: '*/15 * * * *'   # mail queue
+    - cron: '30 */3 * * *'   # news sweep
   workflow_dispatch:
     inputs:
       job:
         description: Which job to run now
         required: true
-        default: mail
+        default: news
         type: choice
-        options: [mail, news]
+        options: [news, mail]
+      maxAnalyses:
+        description: How many briefings to write this run
+        required: false
+        default: '40'
+
+concurrency:
+  group: navair-sweep
+  cancel-in-progress: false
 
 jobs:
-  run:
+  mail:
+    if: github.event.schedule == '*/15 * * * *' || github.event.inputs.job == 'mail'
     runs-on: ubuntu-latest
     steps:
       - name: Drain the mail queue
-        if: github.event.schedule == '*/10 * * * *' || github.event.inputs.job == 'mail'
         run: |
           code=$(curl -s -o /tmp/out.json -w '%{http_code}' --max-time 120 \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
@@ -29,11 +42,34 @@ jobs:
           cat /tmp/out.json; echo
           test "$code" = "200"
 
-      - name: Sweep the news sources
-        if: github.event.schedule == '0 */3 * * *' || github.event.inputs.job == 'news'
-        run: |
-          code=$(curl -s -o /tmp/out.json -w '%{http_code}' --max-time 300 \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.PROD_URL }}/api/cron/news")
-          cat /tmp/out.json; echo
-          test "$code" = "200"
+  news:
+    if: github.event.schedule == '30 */3 * * *' || github.event.inputs.job == 'news'
+    runs-on: ubuntu-latest
+    # Long enough to work through a backlog at the rate the model allows, short enough that
+    # a wedged run cannot occupy the runner all day.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Sweep the sources and write briefings
+        env:
+          ADMIN_DATABASE_URL: ${{ secrets.ADMIN_DATABASE_URL }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: ${{ secrets.GROQ_MODEL }}
+          GUARDIAN_API_KEY: ${{ secrets.GUARDIAN_API_KEY }}
+          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
+          NYT_API_KEY: ${{ secrets.NYT_API_KEY }}
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          COMTRADE_API_KEY: ${{ secrets.COMTRADE_API_KEY }}
+          WTO_API_KEY: ${{ secrets.WTO_API_KEY }}
+          # No wall clock here, so the run is paced to stay inside the model's per-minute
+          # allowance instead of racing it and collecting rate-limit refusals.
+          NEWS_MAX_ANALYSES: ${{ github.event.inputs.maxAnalyses || '40' }}
+          NEWS_MAX_NOTES: '40'
+          NEWS_ANALYSIS_DELAY_MS: '20000'
+          NEWS_NOTE_DELAY_MS: '4000'
+        run: npm run news:sweep

@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import { classify, isWorthKeeping, type ScoredItem } from './relevance';
-import { anomalousReadings, fetchFederalRegister, fetchGdelt, fetchGuardian, fetchIndiaTrade, fetchNewsApi, fetchNewYorkTimes, readChokepoints, readingToItem } from './sources';
+import { anomalousReadings, fetchFederalRegister, fetchGdelt, fetchGuardian, fetchIndiaTrade, fetchNewsApi, fetchNewYorkTimes, fetchTradePress, readChokepoints, readingToItem } from './sources';
 import { clusterItems } from './clustering';
 import { analyseEventCorridors, AnalysisUnavailable, summariseForIndia } from './analysis';
 
@@ -50,6 +50,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepResult> {
     ['Guardian', async () => fetchGuardian({ sinceDays: 5 })],
     ['New York Times', async () => fetchNewYorkTimes({ sinceDays: 7 })],
     ['NewsAPI', async () => fetchNewsApi({ sinceDays: 5 })],
+    ['Trade press', async () => fetchTradePress({ sinceDays: 7 })],
     ['India trade desk', async () => fetchIndiaTrade({ sinceDays: 7 })],
     ['Federal Register', async () => fetchFederalRegister({ sinceDays: 21 })],
   ] as const) {
