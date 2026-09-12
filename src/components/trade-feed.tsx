@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, errorMessage, formatDate } from './api';
 import { Loading, Notice } from './notice';
-import type { EventDetail, FeedCard, ImpactDetail } from '@/lib/news/feed';
+import type { EventDetail, FeedCard, FeedPage, ImpactDetail } from '@/lib/news/feed';
 import './trade-feed.css';
 
 // The feed reads as a briefing, not an article. Bullets, highlighted figures, and the
@@ -16,8 +16,24 @@ const SEVERITY_WORDS: Record<string, string> = {
 const TOPIC_WORDS: Record<string, string> = {
   chokepoint: 'Chokepoint', tariff: 'Tariffs', sanctions: 'Sanctions', conflict: 'Conflict',
   port_disruption: 'Ports', carrier_capacity: 'Capacity', export_control: 'Export controls',
-  customs_policy: 'Customs', energy: 'Energy',
+  customs_policy: 'Customs', energy: 'Energy', trade_agreement: 'Trade deals',
+  labour: 'Strikes', weather: 'Weather', infrastructure: 'Infrastructure',
+  regulation: 'Rules', currency: 'Currency', commodity: 'Commodities',
+  security: 'Security', biosecurity: 'Biosecurity', cyber: 'Cyber', india_policy: 'India policy',
 };
+
+// Day headings, so the feed reads as a record rather than a pile. "Today" and "Yesterday"
+// because that is how people talk about news.
+function dayHeading(iso: string) {
+  const date = new Date(iso);
+  const today = new Date();
+  const days = Math.round((Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+    - Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())) / 86400000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
+}
 const REGION_WORDS: Record<string, string> = {
   gulf: 'Gulf', europe: 'Europe', sea_asia: 'SE Asia', east_asia: 'East Asia',
   americas: 'Americas', india: 'India',
@@ -102,7 +118,11 @@ function Card({ card }: { card: FeedCard }) {
         <span className="tf-when">{formatDate(card.lastSeen)}</span>
       </div>
       <h3>{card.title}</h3>
-      {card.teaser ? <p className="tf-teaser"><Highlighted text={card.teaser} /></p> : <p className="tf-teaser tf-muted">{card.summary}</p>}
+      {card.indiaNote
+        ? <p className="tf-india"><span className="tf-india-tag">India</span> <Highlighted text={card.indiaNote} /></p>
+        : card.teaser ? <p className="tf-teaser"><Highlighted text={card.teaser} /></p>
+        : <p className="tf-teaser tf-muted">{card.summary}</p>}
+      {card.indiaNote && card.teaser && <p className="tf-teaser"><Highlighted text={card.teaser} /></p>}
       <p className="tf-routes">
         {card.corridors.length > 0
           ? <>Affects <strong>{card.corridors.map(corridorWords).join(', ')}</strong></>
@@ -141,30 +161,53 @@ function Card({ card }: { card: FeedCard }) {
 }
 
 export function TradeFeed() {
+  const [page, setPage] = useState<FeedPage | null>(null);
   const [cards, setCards] = useState<FeedCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [topic, setTopic] = useState<string>('all');
 
-  const load = useCallback(async () => {
+  const PAGE = 40;
+  const load = useCallback(async (offset: number) => {
+    const result = await api<FeedPage>(`/api/news?limit=${PAGE}&offset=${offset}`);
+    setPage(result);
+    setCards((current) => (offset === 0 ? result.events : [...current, ...result.events]));
+  }, []);
+
+  useEffect(() => {
+    void load(0).catch((reason) => setError(errorMessage(reason))).finally(() => setLoading(false));
+  }, [load]);
+
+  async function loadMore() {
+    if (!page) return;
+    setLoadingMore(true);
     try {
-      const result = await api<{ events: FeedCard[] }>('/api/news?limit=30');
-      setCards(result.events);
+      await load(page.offset + page.limit);
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
-      setLoading(false);
+      setLoadingMore(false);
     }
-  }, []);
-  useEffect(() => { void load(); }, [load]);
+  }
 
   const topics = [...new Set(cards.flatMap((card) => card.topics))].sort();
   const shown = topic === 'all' ? cards : cards.filter((card) => card.topics.includes(topic));
+  const hasMore = Boolean(page && cards.length < page.total);
+
+  // Group by day so nothing is lost simply because something newer arrived.
+  const days: Array<[string, FeedCard[]]> = [];
+  for (const card of shown) {
+    const heading = dayHeading(card.lastSeen);
+    const bucket = days.find(([label]) => label === heading);
+    if (bucket) bucket[1].push(card);
+    else days.push([heading, [card]]);
+  }
 
   return <div className="page-shell tf-shell">
     <div className="page-title">
       <div><p className="eyebrow">Trade disruption watch</p><h1>What is moving in the world, and what it does to your cargo</h1></div>
-      <p>Navair watches chokepoints, tariff rulings and conflicts, then works out what each one changes for the corridors it ships on. Sourced, updated through the day, and never a price prediction.</p>
+      <p>Navair watches chokepoints, tariffs, strikes, weather, sanctions and policy, then works out what each one changes for the corridors it ships on. Every item carries a note on what it means for India. Sourced, kept on the record, and never a price prediction.</p>
     </div>
 
     {error && <Notice>{error}</Notice>}
@@ -174,6 +217,10 @@ export function TradeFeed() {
       Nothing has cleared the relevance bar yet. The next sweep will fill this page.
     </div>}
 
+    {page && page.total > 0 && <p className="tf-count">
+      {page.total} event{page.total === 1 ? '' : 's'} on the record · showing {shown.length}
+    </p>}
+
     {topics.length > 1 && <div className="tf-filters">
       <button type="button" className={topic === 'all' ? 'tf-filter tf-filter-on' : 'tf-filter'} onClick={() => setTopic('all')}>Everything</button>
       {topics.map((value) => <button type="button" key={value}
@@ -181,6 +228,13 @@ export function TradeFeed() {
         onClick={() => setTopic(value)}>{TOPIC_WORDS[value] ?? value}</button>)}
     </div>}
 
-    <div className="tf-list">{shown.map((card) => <Card card={card} key={card.slug} />)}</div>
+    {days.map(([heading, group]) => <section className="tf-day" key={heading}>
+      <h2 className="tf-day-heading">{heading}<span>{group.length} item{group.length === 1 ? '' : 's'}</span></h2>
+      <div className="tf-list">{group.map((card) => <Card card={card} key={card.slug} />)}</div>
+    </section>)}
+
+    {hasMore && <button type="button" className="tf-more" onClick={() => void loadMore()} disabled={loadingMore}>
+      {loadingMore ? 'Loading…' : `Show earlier news (${(page?.total ?? 0) - cards.length} more)`}
+    </button>}
   </div>;
 }

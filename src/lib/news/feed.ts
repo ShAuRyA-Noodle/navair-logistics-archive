@@ -20,7 +20,11 @@ export type FeedCard = {
   corridorCount: number;
   teaser: string | null;
   sourceCount: number;
+  indiaNote: string | null;
+  status: 'active' | 'archived';
 };
+
+export type FeedPage = { events: FeedCard[]; total: number; offset: number; limit: number };
 
 export type ImpactDetail = {
   corridor: string;
@@ -45,24 +49,35 @@ export type EventDetail = {
 
 const SEVERITY_RANK = { severe: 0, elevated: 1, watch: 2, none: 3 } as const;
 
-export async function listFeed(limit = 24): Promise<FeedCard[]> {
-  const count = z.coerce.number().int().min(1).max(60).parse(limit);
+// Chronological and paginated. The old version ordered by importance and cut the list at a
+// fixed limit, so a busy day pushed yesterday's news off the page entirely - it looked like
+// the sweep had deleted things. Nothing is dropped now; older items simply sit lower.
+export async function listFeed(limit = 40, offset = 0): Promise<FeedPage> {
+  const count = z.coerce.number().int().min(1).max(100).parse(limit);
+  const skip = z.coerce.number().int().min(0).max(10_000).parse(offset);
   return withActor(null, async (db) => {
     const rows = (await db.query(
-      `SELECT t.slug, t.title, t.summary, t.importance, t.topics, t.corridors, t.last_seen AS "lastSeen",
-              t.worst_severity AS severity, t.corridor_count AS "corridorCount", t.teaser,
-              e.chokepoints, e.item_count AS "sourceCount"
-       FROM public.public_event_teasers($1) t
-       JOIN public.news_events e ON e.slug = t.slug`,
-      [count],
+      `SELECT slug, title, summary, importance, topics, corridors, chokepoints,
+              last_seen AS "lastSeen", status, india_note AS "indiaNote",
+              worst_severity AS severity, corridor_count AS "corridorCount",
+              teaser, source_count AS "sourceCount", total_count AS "totalCount"
+       FROM public.public_news_feed($1, $2)`,
+      [count, skip],
     )).rows;
-    return rows.map((row) => ({
-      ...row,
-      importance: Number(row.importance),
-      corridorCount: Number(row.corridorCount ?? 0),
-      sourceCount: Number(row.sourceCount ?? 0),
-      lastSeen: row.lastSeen instanceof Date ? row.lastSeen.toISOString() : String(row.lastSeen),
-    })) as FeedCard[];
+    return {
+      events: rows.map((row) => ({
+        slug: row.slug, title: row.title, summary: row.summary,
+        importance: Number(row.importance), topics: row.topics, corridors: row.corridors,
+        chokepoints: row.chokepoints, severity: row.severity,
+        corridorCount: Number(row.corridorCount ?? 0),
+        sourceCount: Number(row.sourceCount ?? 0),
+        teaser: row.teaser, indiaNote: row.indiaNote, status: row.status,
+        lastSeen: row.lastSeen instanceof Date ? row.lastSeen.toISOString() : String(row.lastSeen),
+      })) as FeedCard[],
+      total: Number(rows[0]?.totalCount ?? 0),
+      offset: skip,
+      limit: count,
+    };
   });
 }
 
@@ -70,8 +85,8 @@ export async function getEvent(slug: string, actorId: string | null): Promise<Ev
   const key = z.string().trim().min(3).max(120).regex(/^[a-z0-9-]+$/).parse(slug);
   return withActor(actorId, async (db) => {
     const event = (await db.query(
-      `SELECT slug,title,summary,importance,topics,corridors,chokepoints,
-              last_seen AS "lastSeen",item_count AS "sourceCount"
+      `SELECT slug,title,summary,importance,topics,corridors,chokepoints,status,
+              last_seen AS "lastSeen",item_count AS "sourceCount",india_note AS "indiaNote"
        FROM news_events WHERE slug=$1`,
       [key],
     )).rows[0];
@@ -120,7 +135,7 @@ export async function getEvent(slug: string, actorId: string | null): Promise<Ev
       };
     }).sort((left, right) => SEVERITY_RANK[left.severity as keyof typeof SEVERITY_RANK] - SEVERITY_RANK[right.severity as keyof typeof SEVERITY_RANK]);
 
-    const teaser = (await db.query('SELECT worst_severity, teaser, corridor_count FROM public.public_event_teasers(60) WHERE slug=$1', [key])).rows[0];
+    const teaser = (await db.query('SELECT worst_severity, teaser, corridor_count FROM public.public_news_feed(100, 0) WHERE slug=$1', [key])).rows[0];
 
     return {
       card: {
@@ -136,6 +151,8 @@ export async function getEvent(slug: string, actorId: string | null): Promise<Ev
         corridorCount: Number(teaser?.corridor_count ?? 0),
         teaser: teaser?.teaser ?? null,
         sourceCount: Number(event.sourceCount ?? 0),
+        indiaNote: event.indiaNote ?? null,
+        status: event.status ?? 'active',
       },
       // Nothing is withheld while the analysis is public, so nothing reads as locked.
       locked: !isPublic && impacts.length === 0 && Number(teaser?.corridor_count ?? 0) > 0,

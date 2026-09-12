@@ -15,6 +15,10 @@ import { corridorContext, describeContext } from './context';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = 'openai/gpt-oss-120b';
+// One-line notes do not need the large model, and running them on it burns the shared
+// tokens-per-minute allowance that the full briefings need.
+const DEFAULT_NOTE_MODEL = 'openai/gpt-oss-20b';
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const TIMEOUT_MS = 60_000;
 
 export type AnalysisInput = {
@@ -108,11 +112,20 @@ const FORBIDDEN = [
   // Cost language is price language wearing a different coat.
   /(lower|higher|rising|falling|reduced|increased|cheaper|costlier)\s+(shipping|freight|transport|cargo)?\s*(costs?|prices?|rates?|charges?)/i,
   /(costs?|prices?|rates?)\s+(will|may|could|should|are likely to)\s+(rise|fall|increase|drop|climb|ease)/i,
+  // The same claim with the verb in front: "could ease costs", "may raise prices".
+  /(will|may|could|should|likely to)\s+(ease|raise|lift|cut|reduce|increase|lower|push up|drive up)\s+(the\s+)?(costs?|prices?|rates?|charges?)/i,
+  // A commodity move tied to what carriage costs is a freight claim however it is worded.
+  /(lower|higher|rising|falling|cheaper|costlier)\s+\w*\s*(prices?|costs?)[^.]{0,50}\b(freight|shipping|carriage|haulage|cargo|container|vessel)\b/i,
+  /\b(freight|shipping|carriage|haulage|cargo)\b[^.]{0,50}(lower|higher|rising|falling|cheaper|costlier)\s+\w*\s*(prices?|costs?|rates?)/i,
 ];
 
+// The highlight markers are stripped before checking. Leaving them in let "Lower **oil
+// prices** could ease costs" through, because the pattern expected a space where the
+// asterisks sat - the same blind spot that once hid "**$37.1 bn**" from the money rule.
 function violatesRules(text: string): string | null {
+  const plain = text.replace(/\*\*/g, '').replace(/\s+/g, ' ');
   for (const pattern of FORBIDDEN) {
-    const hit = pattern.exec(text);
+    const hit = pattern.exec(plain);
     if (hit) return hit[0];
   }
   return null;
@@ -229,3 +242,89 @@ async function requestAnalysis(input: AnalysisInput): Promise<Analysis> {
 
 // Exposed for tests: the refusal rules are the contract, so they are pinned directly.
 export const __testing = { violatesRules };
+
+
+// A one-line India note, written for every event no matter how small. A minor customs
+// circular will never justify a full per-corridor briefing, but it should still say what it
+// means here rather than sitting in the feed as a bare headline. Short, cheap, and bound by
+// the same rule as everything else: no prices, no market calls.
+const NOTE_SYSTEM = [
+  'You brief Indian exporters and importers at a freight forwarder.',
+  'Given one world event, write one or two plain sentences on what it means for Indian trade.',
+  '',
+  'Rules:',
+  '- Under 45 words in total. One idea. No preamble, no throat-clearing.',
+  '- Plain English a first-time exporter understands.',
+  '- Wrap at most two genuinely important terms in **double asterisks**.',
+  '- Never state what shipping or freight costs, and never forecast any price or rate.',
+  '- You may repeat an observed, already-published figure (an oil price that has been reported, a trade value, a tariff rate) and say what it means operationally. What you must not do is predict where it goes next or claim what carriage will cost.',
+  '- If the honest answer is that it barely touches India, say exactly that in one sentence.',
+  '- Claim nothing the material does not support.',
+  '',
+  'Return only JSON: {"note":"...","relevanceToIndia":"direct|indirect|minimal"}',
+].join('\n');
+
+const noteSchema = z.object({
+  note: z.string().trim().min(15).max(320),
+  relevanceToIndia: z.enum(['direct', 'indirect', 'minimal']),
+});
+export type IndiaNote = z.infer<typeof noteSchema> & { model: string };
+
+export async function summariseForIndia(input: {
+  title: string; summary: string; topics: string[];
+  articles: Array<{ title: string; summary: string | null; sourceKey: string }>;
+}, attempt = 0): Promise<IndiaNote> {
+  const key = process.env.GROQ_API_KEY;
+  if (!key) throw new AnalysisUnavailable('GROQ_API_KEY is not configured, so no India note was written.');
+  const model = process.env.GROQ_NOTE_MODEL || DEFAULT_NOTE_MODEL;
+  const prompt = [
+    `Event: ${input.title}`,
+    input.summary ? `Summary: ${input.summary}` : '',
+    input.topics.length ? `Topics: ${input.topics.join(', ')}` : '',
+    input.articles.slice(0, 4).map((article, index) => `[${index + 1}] ${article.title}${article.summary ? ` — ${article.summary.slice(0, 200)}` : ''}`).join('\n'),
+    '',
+    'What does this mean for Indian trade? One or two sentences.',
+  ].filter(Boolean).join('\n');
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let raw: string;
+  try {
+    const response = await fetch(GROQ_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model, temperature: 0.2, max_completion_tokens: 2000, reasoning_effort: 'low',
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'system', content: NOTE_SYSTEM }, { role: 'user', content: prompt }],
+      }),
+    });
+    if (response.status === 429 || response.status >= 500) {
+      // The allowance is per minute, so waiting is the whole fix.
+      if (attempt < 2) { clearTimeout(timer); await sleep(20_000 * (attempt + 1)); return summariseForIndia(input, attempt + 1); }
+      throw new AnalysisUnavailable(`Groq is rate limiting India notes; the next sweep will finish them.`);
+    }
+    if (!response.ok) throw new AnalysisUnavailable(`Groq responded ${response.status}: ${(await response.text()).slice(0, 160)}`);
+    raw = ((await response.json()) as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content ?? '';
+  } catch (error) {
+    if (error instanceof AnalysisUnavailable) throw error;
+    throw new AnalysisUnavailable(error instanceof Error ? error.message : 'Groq call failed.');
+  } finally {
+    clearTimeout(timer);
+  }
+
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { throw new AnalysisUnavailable('The model did not return usable JSON for the India note.'); }
+  const result = noteSchema.safeParse(parsed);
+  if (!result.success) throw new AnalysisUnavailable('The India note did not fit the required shape.');
+  const breach = violatesRules(result.data.note);
+  if (breach) throw new AnalysisUnavailable(`The India note wrote about pricing ("${breach}"), so it was discarded.`);
+  return { ...result.data, model };
+}
+
+// Exposed so stored notes can be re-checked when the rules tighten. A note written under
+// looser rules should not survive them.
+export function auditNote(text: string): string | null {
+  return violatesRules(text);
+}

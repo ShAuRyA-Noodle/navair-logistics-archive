@@ -59,11 +59,16 @@ const GDELT_ALLOWED: Record<string, number> = {
   'maritime-executive.com': 4, 'tradewindsnews.com': 4, 'container-news.com': 3,
 };
 
+// The query has to ask for everything the classifier can recognise, or whole topics never
+// arrive to be classified. Kept as phrases because GDELT matches loose words far too widely.
 const GDELT_QUERY = [
   '("Strait of Hormuz" OR "Suez Canal" OR "Red Sea shipping" OR "Bab el-Mandeb"',
   'OR "Panama Canal" OR "Strait of Malacca" OR "port strike" OR "shipping tariff"',
   'OR "export ban" OR "trade sanctions" OR "container freight" OR "blank sailing"',
-  'OR "supply chain disruption")',
+  'OR "supply chain disruption" OR "port congestion" OR "dock workers strike"',
+  'OR "customs clearance delay" OR "free trade agreement" OR "rules of origin"',
+  'OR "cargo theft" OR "piracy attack" OR "war risk insurance" OR "vessel diversion"',
+  'OR "export restriction" OR "import duty" OR "shipping delays" OR "freight capacity")',
 ].join(' ');
 
 function gdeltDate(value: string): string {
@@ -242,10 +247,48 @@ export function readingToItem(reading: ChokepointReading): RawItem {
 // error: the source simply sits out the sweep.
 // ---------------------------------------------------------------------------
 
+// Same principle for the keyed newsrooms: search the whole checklist, not a corner of it.
 const NEWS_QUERY_TERMS = [
-  'Strait of Hormuz', 'Suez Canal', 'Red Sea shipping', 'port strike',
+  'Strait of Hormuz', 'Suez Canal', 'Red Sea shipping', 'port strike', 'port congestion',
   'export ban', 'trade sanctions', 'tariff', 'container shipping', 'supply chain disruption',
+  'free trade agreement', 'customs delay', 'cargo theft', 'war risk insurance',
+  'export restriction', 'shipping disruption', 'freight capacity', 'dock workers',
 ];
+
+// India-facing sweep. The general query is written for world news and rarely surfaces an
+// Indian notification, so these run as their own pass against the same sources.
+const INDIA_QUERY_TERMS = [
+  'DGFT notification', 'India export policy', 'India import duty', 'Indian ports congestion',
+  'India customs circular', 'RoDTEP', 'India trade agreement', 'Nhava Sheva', 'Mundra port',
+];
+
+export async function fetchIndiaTrade(options: FetchOptions = {}): Promise<RawItem[]> {
+  const key = process.env.NEWSAPI_KEY;
+  if (!key) return [];
+  const fetcher = options.fetcher ?? fetch;
+  const from = new Date((options.now ?? new Date()).getTime() - (options.sinceDays ?? 7) * 86_400_000).toISOString().slice(0, 10);
+  const query = `(${INDIA_QUERY_TERMS.map((term) => `"${term}"`).join(' OR ')})`;
+  const url = 'https://newsapi.org/v2/everything'
+    + `?q=${encodeURIComponent(query)}&from=${from}&language=en&sortBy=publishedAt`
+    + `&pageSize=${Math.min(100, options.limit ?? 40)}&apiKey=${encodeURIComponent(key)}`;
+  const payload = await getJson(url, fetcher) as { articles?: Array<Record<string, unknown>> };
+  return (payload.articles ?? []).flatMap((article) => {
+    const host = (() => { try { return new URL(String(article.url)).host.replace(/^www\./, '').toLocaleLowerCase(); } catch { return ''; } })();
+    const trust = GDELT_ALLOWED[host];
+    if (!trust || !article.title) return [];
+    return [{
+      sourceKey: `india:${host}`,
+      externalId: String(article.url),
+      url: String(article.url),
+      title: String(article.title),
+      summary: article.description ? String(article.description) : null,
+      publishedAt: String(article.publishedAt ?? new Date().toISOString()),
+      trust,
+      measurement: null,
+      topicHints: ['india_policy'] as Topic[],
+    } satisfies RawItem];
+  });
+}
 
 export async function fetchGuardian(options: FetchOptions = {}): Promise<RawItem[]> {
   const key = process.env.GUARDIAN_API_KEY;

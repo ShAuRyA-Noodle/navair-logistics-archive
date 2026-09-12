@@ -15,7 +15,7 @@ try {
     onProgress: (line) => console.log(line),
   });
   console.log(`\n${result.events} events (${result.newEvents} new), ${result.items} qualifying items (${result.newItems} new), ${result.archived} archived.`);
-  console.log(`analysis: ${result.analysed} written, ${result.cached} already cached${result.refused.length ? `, ${result.refused.length} refused` : ''}`);
+  console.log(`analysis: ${result.analysed} written, ${result.cached} already cached · India notes: ${result.notesWritten}${result.refused.length ? ` · ${result.refused.length} refused` : ''}`);
   for (const line of result.refused.slice(0, 3)) console.log(`  ${line}`);
   console.log(`Completed in ${(result.elapsedMs / 1000).toFixed(1)}s.`);
 } finally {

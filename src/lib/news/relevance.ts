@@ -5,9 +5,14 @@
 // testable: no model decides what is relevant, because a model that decides relevance also
 // decides what we never see. The AI layer runs later, on what survives these gates.
 
+// The coverage checklist. Anything that can change how Indian cargo moves, costs to
+// insure, or clears a border belongs here. Adding a topic means adding its terms below and
+// its corridor mapping - nothing else in the pipeline needs to know.
 export type Topic =
   | 'chokepoint' | 'tariff' | 'sanctions' | 'conflict' | 'port_disruption'
-  | 'carrier_capacity' | 'export_control' | 'customs_policy' | 'energy';
+  | 'carrier_capacity' | 'export_control' | 'customs_policy' | 'energy'
+  | 'trade_agreement' | 'labour' | 'weather' | 'infrastructure' | 'regulation'
+  | 'currency' | 'commodity' | 'security' | 'biosecurity' | 'cyber' | 'india_policy';
 
 export type Region = 'india' | 'gulf' | 'red_sea' | 'europe' | 'sea_asia' | 'east_asia' | 'americas' | 'africa' | 'global';
 
@@ -51,6 +56,17 @@ const TOPIC_TERMS: Record<Topic, string[]> = {
   export_control: ['export ban', 'export control', 'export restriction', 'quota', 'licence requirement', 'license requirement', 'rare earth'],
   customs_policy: ['customs rule', 'dgft', 'icegate', 'import policy', 'inspection regime', 'clearance delay', 'e-way bill', 'trade facilitation'],
   energy: ['oil price', 'crude', 'bunker fuel', 'lng', 'fuel surcharge', 'opec', 'diesel price', 'energy crisis'],
+  trade_agreement: ['free trade agreement', 'fta', 'trade pact', 'trade deal', 'cepa', 'ceca', 'rcep', 'mercosur', 'customs union', 'preferential access', 'rules of origin', 'most favoured nation'],
+  labour: ['strike', 'walkout', 'industrial action', 'union dispute', 'lockout', 'go-slow', 'staff shortage', 'driver shortage', 'pilot strike', 'truckers protest'],
+  weather: ['cyclone', 'typhoon', 'hurricane', 'monsoon', 'flood', 'fog', 'drought', 'low water', 'storm', 'heatwave', 'earthquake'],
+  infrastructure: ['dedicated freight corridor', 'new terminal', 'berth expansion', 'runway', 'rail link', 'inland container depot', 'icd', 'dry port', 'warehouse capacity', 'bridge collapse', 'canal draft'],
+  regulation: ['imo', 'emissions rule', 'cbam', 'carbon border', 'sulphur cap', 'safety directive', 'compliance deadline', 'certification requirement', 'packaging rule', 'labelling rule'],
+  currency: ['rupee', 'exchange rate', 'currency control', 'capital control', 'devaluation', 'forex reserves', 'remittance rule', 'payment restriction', 'letter of credit'],
+  commodity: ['wheat export', 'rice export', 'sugar export', 'steel export', 'semiconductor supply', 'rare earth', 'fertiliser', 'edible oil', 'crop failure', 'harvest'],
+  security: ['piracy', 'hijack', 'stowaway', 'smuggling', 'cargo theft', 'armed robbery at sea', 'convoy', 'naval escort', 'war risk'],
+  biosecurity: ['quarantine', 'phytosanitary', 'foot and mouth', 'avian influenza', 'pest interception', 'fumigation', 'health certificate', 'outbreak'],
+  cyber: ['cyber attack', 'ransomware', 'port systems outage', 'it outage', 'data breach', 'system failure'],
+  india_policy: ['dgft notification', 'rodtep', 'drawback', 'gst on freight', 'sez', 'pli scheme', 'export incentive', 'import licence', 'bis certification', 'customs circular', 'budget announcement'],
 };
 
 const REGION_TERMS: Record<Region, string[]> = {
@@ -108,12 +124,18 @@ const TRADE_NOUNS = ['duty', 'duties', 'tariff', 'import', 'imports', 'export', 
   'customs', 'sanction', 'sanctions', 'quota', 'shipment', 'shipments', 'cargo', 'vessel', 'vessels',
   'port', 'ports', 'freight', 'container', 'containers', 'shipping', 'supply chain', 'goods', 'commodity'];
 
+// Weight is "how much could this change a shipment", not "how dramatic is the headline".
 const TOPIC_WEIGHT: Record<Topic, number> = {
   chokepoint: 30, conflict: 22, sanctions: 20, tariff: 20, export_control: 18,
-  port_disruption: 16, carrier_capacity: 14, customs_policy: 12, energy: 10,
+  port_disruption: 16, security: 16, carrier_capacity: 14, labour: 14, weather: 14,
+  customs_policy: 12, india_policy: 12, biosecurity: 12, commodity: 11, cyber: 11,
+  trade_agreement: 11, regulation: 10, energy: 10, currency: 9, infrastructure: 8,
 };
 
-export const MINIMUM_RELEVANCE = 35;
+export const MINIMUM_RELEVANCE = 22;
+// Above this an event earns the full per-corridor analysis; below it, it still appears in
+// the feed as a one-line note. Nothing that passes the gates is discarded.
+export const MAJOR_RELEVANCE = 55;
 
 const boundaryCache = new Map<string, RegExp>();
 
@@ -177,6 +199,10 @@ export function isWorthKeeping(item: ScoredItem): boolean {
   // Something has to connect it to a lane we serve, or to trade at large.
   if (item.corridors.length === 0 && !item.regions.includes('global')) return false;
   return item.relevance >= MINIMUM_RELEVANCE;
+}
+
+export function isMajor(item: ScoredItem): boolean {
+  return item.relevance >= MAJOR_RELEVANCE;
 }
 
 export function importanceOf(items: ScoredItem[]): number {

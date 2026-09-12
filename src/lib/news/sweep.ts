@@ -1,8 +1,8 @@
 import type { Pool } from 'pg';
 import { classify, isWorthKeeping, type ScoredItem } from './relevance';
-import { anomalousReadings, fetchFederalRegister, fetchGdelt, fetchGuardian, fetchNewsApi, fetchNewYorkTimes, readChokepoints, readingToItem } from './sources';
+import { anomalousReadings, fetchFederalRegister, fetchGdelt, fetchGuardian, fetchIndiaTrade, fetchNewsApi, fetchNewYorkTimes, readChokepoints, readingToItem } from './sources';
 import { clusterItems } from './clustering';
-import { analyseImpact, AnalysisUnavailable } from './analysis';
+import { analyseImpact, AnalysisUnavailable, summariseForIndia } from './analysis';
 
 // One sweep: fetch, gate, cluster, store, then analyse a bounded batch.
 //
@@ -29,6 +29,7 @@ export type SweepResult = {
   archived: number;
   analysed: number;
   cached: number;
+  notesWritten: number;
   refused: string[];
   elapsedMs: number;
 };
@@ -49,6 +50,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepResult> {
     ['Guardian', async () => fetchGuardian({ sinceDays: 5 })],
     ['New York Times', async () => fetchNewYorkTimes({ sinceDays: 7 })],
     ['NewsAPI', async () => fetchNewsApi({ sinceDays: 5 })],
+    ['India trade desk', async () => fetchIndiaTrade({ sinceDays: 7 })],
     ['Federal Register', async () => fetchFederalRegister({ sinceDays: 21 })],
   ] as const) {
     try {
@@ -72,7 +74,7 @@ export async function runSweep(options: SweepOptions): Promise<SweepResult> {
 
   for (const note of notes) log(`  ${note}`);
 
-  const blank: SweepResult = { notes, events: 0, newEvents: 0, items: collected.length, newItems: 0, archived: 0, analysed: 0, cached: 0, refused: [], elapsedMs: Date.now() - started };
+  const blank: SweepResult = { notes, events: 0, newEvents: 0, items: collected.length, newItems: 0, archived: 0, analysed: 0, cached: 0, notesWritten: 0, refused: [], elapsedMs: Date.now() - started };
   if (collected.length === 0) return blank;
 
   const clusters = clusterItems(collected);
@@ -109,8 +111,9 @@ export async function runSweep(options: SweepOptions): Promise<SweepResult> {
         if (stored.rows[0]?.inserted) newItems += 1;
       }
     }
-    // An event nobody has written about for a fortnight is history, not intelligence.
-    const aged = await client.query("UPDATE news_events SET status='archived' WHERE status='active' AND last_seen < now() - interval '14 days'");
+    // Older events are labelled, never hidden. The feed reads chronologically and shows
+    // them under their own date, because a trade desk wants the record, not just today.
+    const aged = await client.query("UPDATE news_events SET status='archived' WHERE status='active' AND last_seen < now() - interval '30 days'");
     archived = aged.rowCount ?? 0;
     await client.query('COMMIT');
   } catch (error) {
@@ -121,9 +124,42 @@ export async function runSweep(options: SweepOptions): Promise<SweepResult> {
 
   let analysed = 0;
   let cached = 0;
+  let notesWritten = 0;
   let consecutiveFailures = 0;
   const refused: string[] = [];
   try {
+    // Quiet events matter too: a minor customs circular gets one line on what it means for
+    // India rather than sitting in the feed as a bare headline. This runs for everything
+    // that does not have a note yet, newest first.
+    const pending = (await client.query(
+      `SELECT e.id, e.slug, e.title, e.summary, e.topics
+       FROM news_events e WHERE e.india_note IS NULL
+       ORDER BY e.last_seen DESC LIMIT $1`,
+      [Number(process.env.NEWS_MAX_NOTES ?? 25)],
+    )).rows;
+    for (const event of pending) {
+      if (Date.now() - started > budgetMs) break;
+      const cluster = clusters.find((candidate) => candidate.slug === event.slug);
+      try {
+        const note = await summariseForIndia({
+          title: event.title,
+          summary: event.summary ?? '',
+          topics: event.topics ?? [],
+          articles: (cluster?.items ?? []).map((item) => ({ title: item.title, summary: item.summary, sourceKey: item.sourceKey })),
+        });
+        await client.query(
+          'UPDATE news_events SET india_note=$2, india_note_model=$3, india_note_at=now() WHERE id=$1',
+          [event.id, note.note, note.model],
+        );
+        notesWritten += 1;
+        // Pace the calls: the free allowance is per minute, and a burst wastes it on 429s.
+        await new Promise((resolve) => setTimeout(resolve, Number(process.env.NEWS_NOTE_DELAY_MS ?? 1200)));
+      } catch (error) {
+        if (!(error instanceof AnalysisUnavailable)) throw error;
+        refused.push(`note for ${String(event.slug).slice(0, 40)}: ${error.message}`);
+        if (error.message.includes('not configured')) break;
+      }
+    }
     for (const cluster of clusters) {
       if (analysed >= maxAnalyses || Date.now() - started > budgetMs) break;
       if (cluster.importance < minImportance || cluster.corridors.length === 0) continue;
@@ -166,6 +202,6 @@ export async function runSweep(options: SweepOptions): Promise<SweepResult> {
 
   return {
     notes, events: clusters.length, newEvents, items: collected.length, newItems,
-    archived, analysed, cached, refused, elapsedMs: Date.now() - started,
+    archived, analysed, cached, notesWritten, refused, elapsedMs: Date.now() - started,
   };
 }

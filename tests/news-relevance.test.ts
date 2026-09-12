@@ -1,6 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {classify,isWorthKeeping,importanceOf,type RawItem,type Topic} from '../src/lib/news/relevance';
 import {clusterItems,similarity} from '../src/lib/news/clustering';
+import {auditNote} from '../src/lib/news/analysis';
 
 const item = (title: string, summary: string | null = null, extra: Partial<RawItem> = {}): RawItem => ({
   sourceKey: 'test', externalId: title, url: null, title, summary,
@@ -131,5 +132,35 @@ describe('clustering many reports into one event', () => {
       score(`Strait of Hormuz closed completely report ${index}`, 'Measured collapse in transits.', { sourceKey: `s${index}`, trust: 5, measurement: { changeRatio: -0.9 } })));
     expect(extreme).toBeLessThanOrEqual(10);
     expect(extreme).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('the India note guard', () => {
+  it('sees through the highlight markers the model writes', () => {
+    // "**" between the words used to hide the claim from a pattern expecting a space.
+    expect(auditNote('Lower **oil prices** could ease costs for Indian **energy imports**.')).not.toBeNull();
+    expect(auditNote('Higher **oil prices** mean more fuel costs for shipping.')).not.toBeNull();
+  });
+
+  it('catches a cost claim whichever way round it is phrased', () => {
+    expect(auditNote('Costs will rise for exporters.')).not.toBeNull();
+    expect(auditNote('This could raise costs for exporters.')).not.toBeNull();
+    expect(auditNote('Higher oil prices mean more freight costs.')).not.toBeNull();
+  });
+
+  it('allows an observed macro figure to be explained, which is not a freight quote', () => {
+    // Refusing this left the model unable to write an honest note about an oil-price event.
+    expect(auditNote("Higher oil prices raise India's import bill and tighten the budget.")).toBeNull();
+    expect(auditNote('Oil settled above US$100 this week, which weighs on fuel-intensive exporters.')).toBeNull();
+  });
+
+  it('still allows a sourced macro figure, which is evidence rather than a forecast', () => {
+    expect(auditNote('India exported about US$33.0 billion of goods to the UAE in 2023 (UN Comtrade).')).toBeNull();
+    expect(auditNote('The UAE applied an average MFN tariff of 4.8% in 2021 (WTO).')).toBeNull();
+  });
+
+  it('leaves ordinary operational language alone', () => {
+    expect(auditNote('Vessels may reroute around the **Cape of Good Hope**, adding days to the sailing.')).toBeNull();
+    expect(auditNote('Customs clearance at **Nhava Sheva** could take longer while checks are tightened.')).toBeNull();
   });
 });
