@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { LAND_COORDINATES, COAST_COORDINATES } from './globe-land';
 import { flatLandOpacity, flatLocation, transitionAt } from './globe-transition';
+import { placeMapLabel, type LabelBox } from './map-label-layout';
 
 import { COUNTRIES, COUNTRY_BY_CODE } from './countries';
 import { countryPosition, selectedRouteGeometry } from './selected-route';
@@ -97,7 +98,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
           float facing = max(0.0, vNormal.z);
           float rim = pow(1.0 - facing, 3.2);
           vec3 blue = vec3(0.014, 0.058, 0.17);
-          vec3 warm = vec3(0.008, 0.15, 0.075);
+          vec3 warm = vec3(0.035, 0.09, 0.26);
           vec3 edge = mix(blue, warm, smoothstep(-0.15, 0.7, vNormal.y));
           float grain = fract(sin(dot(vPosition.xy, vec2(127.1, 311.7))) * 43758.5453);
           vec3 base = vec3(0.006, 0.008, 0.013) + grain * 0.002;
@@ -170,7 +171,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
           float distance = length(gl_PointCoord - 0.5);
           float dotAlpha = 1.0 - smoothstep(0.30, 0.5, distance);
           float edge = smoothstep(0.015, 0.26, vFacing);
-          gl_FragColor = vec4(vec3(0.91, 1.0, 0.98) * min(1.0, vShade * 1.16), dotAlpha * edge * vOpacity * mix(1.0, 0.28, uFocus));
+          gl_FragColor = vec4(vec3(0.89, 0.95, 1.0) * min(1.0, vShade * 1.16), dotAlpha * edge * vOpacity * mix(1.0, 0.28, uFocus));
         }
       `,
     });
@@ -197,8 +198,8 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
           float halo = exp(-pow((r - 1.015) / 0.065, 2.0));
           float outer = smoothstep(0.935, 1.002, r);
           float vertical = vPoint.y / max(r, 0.001);
-          vec3 blue = vec3(0.015, 0.19, 1.0);
-          vec3 warm = vec3(0.06, 0.95, 0.52);
+          vec3 blue = vec3(0.03, 0.21, 0.84);
+          vec3 warm = vec3(0.38, 0.62, 0.96);
           vec3 color = mix(blue, warm, smoothstep(-0.24, 0.48, vertical));
           float intensity = 0.44 + 0.56 * abs(vertical);
           float opacity = (edge * 0.72 + halo * 0.22) * outer * intensity;
@@ -226,11 +227,13 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       const element = document.createElement('span');
       element.textContent = name;
       element.setAttribute('aria-hidden', 'true');
-      element.style.cssText = 'position:absolute;left:0;top:0;z-index:2;display:block;opacity:0;transition:opacity .45s cubic-bezier(.22,1,.36,1);pointer-events:none;white-space:nowrap;padding:6px 9px;border-radius:7px;background:rgba(7,9,12,.76);border:1px solid rgba(255,255,255,.075);color:#fff8ef;font:400 10px/1.2 "IBM Plex Mono",monospace;letter-spacing:.025em;text-shadow:0 0 8px rgba(125,255,204,.2);will-change:transform,opacity';
+      element.style.cssText = 'position:absolute;left:0;top:0;z-index:2;display:block;opacity:0;transition:opacity .45s cubic-bezier(.22,1,.36,1);pointer-events:none;white-space:nowrap;padding:6px 9px;border-radius:7px;background:rgba(7,9,12,.76);border:1px solid rgba(255,255,255,.075);color:#fff8ef;font:400 10px/1.2 "Inter Variable",sans-serif;letter-spacing:.025em;text-shadow:0 0 8px rgba(205,231,255,.2);will-change:transform,opacity';
       labelElements.push(element);
       host.appendChild(element);
       return { element, labelWidth: name.length * 6.3 + 20, position: location(latitude, longitude, 1.02), flat: new THREE.Vector3(...flatLocation(latitude, longitude)) };
     });
+    const mobileLabelOrder = [8, 3, 0, 7, 11, 15, 24, 6];
+    const mobileLabels = [...mobileLabelOrder.map(index => labels[index]), ...labels.filter((_, index) => !mobileLabelOrder.includes(index))];
     const projected = new THREE.Vector3();
     const normal = new THREE.Vector3();
     const toCamera = new THREE.Vector3();
@@ -239,7 +242,9 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       const occupied: { x: number; y: number }[] = [];
       const bounds = host.getBoundingClientRect();
       const displayScale = bounds.width / viewportWidth;
-      for (const label of labels) {
+      const mobileMap = isMobile && morph.value > 0.95;
+      const screenBoxes: LabelBox[] = [];
+      for (const label of mobileMap ? mobileLabels : labels) {
         projected.copy(label.position).applyMatrix4(globe.matrixWorld);
         normal.copy(projected).normalize();
         toCamera.copy(camera.position).sub(projected).normalize();
@@ -247,6 +252,16 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
         projected.lerp(label.flat, morph.value).project(camera);
         const x = (projected.x * 0.5 + 0.5) * viewportWidth + 8;
         const y = (-projected.y * 0.5 + 0.5) * viewportHeight - 8;
+        if (mobileMap) {
+          const box = screenBoxes.length < 8 ? placeMapLabel(bounds.left + (x - 8) * displayScale, bounds.top + (y + 8) * displayScale, label.labelWidth, window.innerWidth, screenBoxes) : null;
+          label.element.style.transformOrigin = 'top left';
+          label.element.style.opacity = box ? String((1 - focus.value) * THREE.MathUtils.smoothstep(morph.value, 0.95, 1)) : '0';
+          if (box) {
+            label.element.style.transform = `translate3d(${(box.x - bounds.left) / displayScale}px,${(box.y - bounds.top) / displayScale}px,0) scale(${1 / displayScale})`;
+            screenBoxes.push(box);
+          }
+          continue;
+        }
         const show = occupied.length < (isMobile ? 4 : 8) && facing > 0.2 && bounds.left + x * displayScale > 4 && bounds.left + (x + label.labelWidth) * displayScale < window.innerWidth - 4 && x > 0 && x < viewportWidth - 80 && y > 0 && y < viewportHeight - 20 && !occupied.some((point) => Math.abs(point.x - x) < 125 && Math.abs(point.y - y) < 28);
         label.element.style.opacity = show ? String(THREE.MathUtils.smoothstep(facing, 0.2, 0.42) * (1 - Math.sin(morph.value * Math.PI)) * (1 - focus.value)) : '0';
         label.element.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
@@ -300,9 +315,9 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
             * (1.0 - smoothstep(0.035, 0.34, behind));
           float tip = exp(-pow((behind - 0.023) / 0.024, 2.0));
           float middle = sin(vAlong * 3.14159);
-          vec3 gold = mix(vec3(0.04, 0.48, 0.95), vec3(0.12, 0.95, 0.62), middle);
-          vec3 color = mix(gold, vec3(0.35, 1.0, 0.78), streak);
-          color = mix(color, vec3(0.8, 1.0, 0.94), tip * 0.9);
+          vec3 gold = mix(vec3(0.65, 0.46, 0.13), vec3(1.0, 0.77, 0.08), middle);
+          vec3 color = mix(gold, vec3(1.0, 0.86, 0.39), streak);
+          color = mix(color, vec3(1.0, 0.96, 0.80), tip * 0.9);
           gl_FragColor = vec4(color, (0.22 + streak * 0.78) * uOpacity);
         }
       `,
@@ -340,7 +355,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       globe.add(route);
     }
     const nodeGeometry = new THREE.SphereGeometry(0.008, 12, 8);
-    const nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x64edb4, transparent: true });
+    const nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xffc400, transparent: true });
     const nodes = labelPlaces.map(([, latitude, longitude]) => {
       const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
       node.position.copy(location(latitude, longitude, 1.011));
@@ -357,7 +372,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       uniforms: { uSize: { value: 24 }, uMorph: morph, uFocus: focus },
       vertexShader: `uniform float uSize; uniform float uMorph; attribute vec3 flatPosition; void main() { vec4 p = viewMatrix * mix(modelMatrix * vec4(position, 1.0), vec4(flatPosition, 1.0), uMorph); gl_Position = projectionMatrix * p; gl_PointSize = uSize * (2.28 / -p.z); }`,
-      fragmentShader: `uniform float uFocus; void main() { float r = length(gl_PointCoord - 0.5) * 2.0; float glow = exp(-r * r * 5.5) * (1.0 - smoothstep(0.65, 1.0, r)); gl_FragColor = vec4(0.08, 0.9, 0.55, glow * 0.38 * (1.0 - uFocus)); }`,
+      fragmentShader: `uniform float uFocus; void main() { float r = length(gl_PointCoord - 0.5) * 2.0; float glow = exp(-r * r * 5.5) * (1.0 - smoothstep(0.65, 1.0, r)); gl_FragColor = vec4(0.95, 0.7, 0.18, glow * 0.38 * (1.0 - uFocus)); }`,
     });
     const halos = new THREE.Points(glowGeometry, glowMaterial);
     halos.frustumCulled = false;
@@ -376,7 +391,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
           vec4 world = mix(modelMatrix * vec4(position,1.0),vec4(flatPosition,1.0),uMorph);
           gl_Position = projectionMatrix * viewMatrix * world;
           gl_PointSize = uSize * mix(1.0, 2.6, selected * uFocus); }`,
-      fragmentShader: `varying float vSelected; varying float vOpacity; void main() { float r=length(gl_PointCoord-.5); float alpha=1.0-smoothstep(.22,.5,r); gl_FragColor=vec4(mix(vec3(.28,.55,.65),vec3(.38,1.,.73),vSelected),alpha*vOpacity); }`,
+      fragmentShader: `varying float vSelected; varying float vOpacity; void main() { float r=length(gl_PointCoord-.5); float alpha=1.0-smoothstep(.22,.5,r); gl_FragColor=vec4(mix(vec3(.4,.57,.8),vec3(1.,.78,.15),vSelected),alpha*vOpacity); }`,
     });
     const countryDots = new THREE.Points(countryGeometry, countryMaterial);
     countryDots.frustumCulled = false;
@@ -390,7 +405,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
     const selectedLabels = [0, 1].map(() => {
       const element = document.createElement('span');
       element.setAttribute('aria-hidden', 'true');
-      element.style.cssText = 'position:absolute;left:0;top:0;opacity:0;pointer-events:none;white-space:nowrap;padding:8px 11px;border:1px solid #64edb455;border-radius:8px;background:#101319e8;color:#b8ffe1;font:500 12px/1.3 "Space Grotesk Variable",sans-serif;transition:opacity .3s;z-index:3';
+      element.style.cssText = 'position:absolute;left:0;top:0;opacity:0;pointer-events:none;white-space:nowrap;padding:8px 11px;border:1px solid #bf9d4c66;border-radius:8px;background:#101319e8;color:#ffe3a0;font:500 12px/1.3 "Inter Variable",sans-serif;transition:opacity .3s;z-index:3';
       host.appendChild(element); labelElements.push(element);
       return { element, country: COUNTRIES[0], active: false };
     });
@@ -439,7 +454,16 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
           const point = countryPosition(label.country).applyMatrix4(globe.matrixWorld).lerp(new THREE.Vector3(...flatLocation(label.country.latitude, label.country.longitude)), morph.value).project(camera);
           const x = (point.x * 0.5 + 0.5) * viewportWidth;
           const y = (-point.y * 0.5 + 0.5) * viewportHeight;
-          label.element.style.transform = `translate3d(${x}px,${y - 17}px,0) translate(-50%,-100%)`;
+          if (isMobile && morph.value > 0.95) {
+            const bounds = host.getBoundingClientRect();
+            const scale = bounds.width / viewportWidth;
+            const labelWidth = label.element.offsetWidth;
+            const screenX = Math.max(8 + labelWidth / 2, Math.min(window.innerWidth - 8 - labelWidth / 2, bounds.left + x * scale));
+            label.element.style.transformOrigin = 'top left';
+            label.element.style.transform = `translate3d(${(screenX - bounds.left) / scale}px,${y - 17}px,0) scale(${1 / scale}) translate(-50%,-100%)`;
+          } else {
+            label.element.style.transform = `translate3d(${x}px,${y - 17}px,0) translate(-50%,-100%)`;
+          }
           label.element.style.opacity = label.active && morph.value > 0.9 ? String(focus.value) : '0';
         }
         if (!ready) {

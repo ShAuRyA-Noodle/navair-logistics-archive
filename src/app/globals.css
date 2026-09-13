@@ -6,3 +6,9 @@
 .pager { align-items:center; display:flex; gap:.75rem; justify-content:flex-end; margin-top:1rem; } .pager span { color:var(--muted); font-size:.82rem; } .pager button { font-size:.8rem; padding:.45rem .7rem; } .private-panel { border-color:#d9cda8; } .finance-summary { display:flex; flex-wrap:wrap; gap:1.5rem; margin:1rem 0; } .cost-forecast { border-top:1px solid var(--line); margin-top:1rem; padding-top:1rem; } .cost-forecast ul { margin:.5rem 0 0; padding-left:1.2rem; }
 
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } }
+
+/* Navair brand kit: navy, royal blue, sky, pale blue and warm gold. */
+:root{--brand-navy:#1f3557;--brand-blue:#0835b1;--brand-sky:#609df5;--brand-pale:#cde7ff;--brand-gold:#bf9d4c;--brand-yellow:#ffc400;--font-heading:'Montserrat Variable',sans-serif;--font-ui:'Inter Variable',sans-serif;--font-body:'Open Sauce Sans',sans-serif;--navy:var(--brand-navy);--ink:#1f3557;--green:#0835b1;--green-wash:#e7efff;--wash:#f6f8fc;--line:#d4deed}
+body{font-family:var(--font-body)}
+h1{font-family:var(--font-heading)}
+h2,h3,nav,button{font-family:var(--font-ui)}

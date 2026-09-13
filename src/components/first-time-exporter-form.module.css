@@ -125,3 +125,8 @@
 .embedded{--green:#8ce9c0;--green-wash:rgba(110,232,180,.1);--navy:#b0efda;background:transparent;border:0;border-radius:0;padding:0;box-shadow:none}
 .embeddedHeader{display:none}
 .embedded .question{font-size:clamp(26px,2.2vw,36px)}
+.embedded{--paper:#1b3354;--ink:#f5f8ff;--muted:#b9cbe2;--green:#ffc400;--green-wash:rgba(255,196,0,.09);--navy:#cde7ff;--line:rgba(205,231,255,.2);font-family:var(--font-body)}
+.embedded input,.embedded select,.embedded textarea{background:#1b3354;border-color:#41618b;color:#f5f8ff}
+.embedded .choice,.embedded .chip{background:#1b335477}
+.embedded .choiceActive,.embedded .chipActive{background:var(--green-wash);border-color:var(--brand-gold)}
+.embedded .actions button{background:var(--brand-yellow);color:#172c4a}

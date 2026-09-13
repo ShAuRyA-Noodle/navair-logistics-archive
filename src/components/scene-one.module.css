@@ -22,3 +22,6 @@
  .stage::after{background:linear-gradient(180deg,#080b1099,transparent 40%,#080b1080)}
 }
 @media(prefers-reduced-motion:reduce){.scene{height:100svh}.stage{position:relative}.video{display:none}.caption{transition:none}}
+.scene,.stage{background:#101f38}
+.caption h2{font-family:var(--font-heading);font-weight:600}
+.caption span{font-family:var(--font-ui);color:#ffe3a0}

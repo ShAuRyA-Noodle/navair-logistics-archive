@@ -97,10 +97,11 @@ export function GlobeHero() {
           const state = transitionAt(playhead.progress);
           engine.current?.setScroll(playhead.progress);
           const small = width < 768;
-          const destination = width * (small ? 0.5 : 0.69);
+          const destination = width * (small ? 0.5 : 0.65);
           const x = (width / 2 - initialCentre) * state.centre + (destination - width / 2) * state.dock;
           // At the final camera distance, the map occupies about 82% of the canvas.
-          const finalScale = Math.min(1.1, width * (small ? 0.98 : 0.59) / (globeWidth * 0.82));
+          // Keep the full longitude range inside the phone, including Pacific islands.
+          const finalScale = width * (small ? 0.96 : 0.68) / (globeWidth * 0.82);
           const centreScale = Math.min(1, width * 0.9 / globeWidth);
           const scale = 1 + (centreScale - 1) * state.centre + (finalScale - centreScale) * state.dock;
           stage.current?.style.setProperty('--departure', String(state.centre));
@@ -157,9 +158,17 @@ export function GlobeHero() {
     engine.current?.setRoute(formOpen ? selectedRoute.originCode : '', formOpen ? selectedRoute.destinationCode : '');
   }, [formOpen, selectedRoute, ready]);
 
+  // Warm and mount the form before the first interaction, after the globe is ready.
+  useEffect(() => {
+    if (loading) return;
+    const warmup = window.setTimeout(() => setFormMounted(true), 250);
+    return () => window.clearTimeout(warmup);
+  }, [loading]);
+
   function openEnquiry() {
     closeMenu();
-    const reveal = () => { setFormMounted(true); setFormOpen(true); };
+    setFormMounted(true);
+    const reveal = () => { setFormOpen(true); };
     if (!root.current) return;
     if (reduced || failed) {
       reveal();
@@ -167,7 +176,8 @@ export function GlobeHero() {
       return;
     }
     const target = root.current.getBoundingClientRect().top + window.scrollY + root.current.offsetHeight - window.innerHeight - 1;
-    if (smoothScroll.current) smoothScroll.current.scrollTo(target, { duration: 1.15, lerp: 0, onComplete: reveal });
+    if (Math.abs(window.scrollY - target) < window.innerHeight * 0.15) { reveal(); return; }
+    if (smoothScroll.current) smoothScroll.current.scrollTo(target, { duration: 0.8, lerp: 0, onComplete: reveal });
     else { window.scrollTo({ top: target, behavior: 'instant' }); reveal(); }
   }
   useEffect(() => {
@@ -238,15 +248,15 @@ export function GlobeHero() {
       </div>
     </div>
     <div className={styles.mapCopy} ref={approach} inert={!reduced && !failed}>
-      <div hidden={formOpen} className={styles.approachIntro}>
+      <motion.div aria-hidden={formOpen} inert={formOpen} className={styles.approachIntro} initial={false} animate={{ opacity: formOpen ? 0 : 1, y: formOpen ? -12 : 0 }} transition={{ duration: reduced ? 0 : 0.24 }} style={{ pointerEvents: formOpen ? 'none' : 'auto' }}>
       <p className={styles.eyebrow}>THE NAVAIR APPROACH</p>
       <h2>THE WORLD IS <br />COMPLICATED.<br /><span>LET’S FIND <br />YOUR WAY.</span></h2>
       <p>Every journey starts with the right questions. Share your origin, destination and cargo details. We’ll bring the essentials together.</p>
       <AnimatedCta onClick={openEnquiry}>Start a conversation</AnimatedCta>
       <small>Routes shown are illustrative.</small>
-      </div>
-      {formMounted && <motion.div hidden={!formOpen} className={styles.enquiryPanel} data-lenis-prevent
-        initial={false} animate={{ opacity: formOpen ? 1 : 0, y: formOpen ? 0 : 16 }} transition={{ duration: reduced ? 0 : 0.4 }}>
+      </motion.div>
+      {formMounted && <motion.div aria-hidden={!formOpen} inert={!formOpen} className={styles.enquiryPanel} data-lenis-prevent
+        initial={false} animate={{ opacity: formOpen ? 1 : 0, y: formOpen ? 0 : 12 }} transition={{ duration: reduced ? 0 : 0.28, delay: formOpen && !reduced ? 0.06 : 0 }} style={{ pointerEvents: formOpen ? 'auto' : 'none' }}>
         <div className={styles.enquiryTop}><span>YOUR NEXT JOURNEY</span><button type="button" onClick={closeEnquiry} aria-label="Close enquiry">Close <span aria-hidden="true">×</span></button></div>
         <InlineEnquiry embedded onRouteChange={setSelectedRoute} />
       </motion.div>}

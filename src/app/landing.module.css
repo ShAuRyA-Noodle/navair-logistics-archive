@@ -16,3 +16,7 @@
 .footer>a:last-of-type:is(:hover,:focus-visible){color:#f7c47e;transform:translateY(-2px)}
 .footer small{font:400 11px/1.5 var(--nav-ui)}
 @media(prefers-reduced-motion:reduce){.serviceGrid>a,.serviceGrid h3 span,.footer>a{transition:none}}
+.home{--nav-ui:var(--font-ui);background:#f7f9fc;font-family:var(--font-body)}
+.footer{background:var(--brand-navy);color:#f7f9fc}
+.footerBrand{font-family:var(--font-heading)}
+.footer small{color:var(--brand-pale)}

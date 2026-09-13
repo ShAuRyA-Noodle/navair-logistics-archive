@@ -215,3 +215,36 @@
 .enquiryPanel::-webkit-scrollbar{display:none}
 
 .journey .space{background:radial-gradient(ellipse at 80% 8%,#176b4926,transparent 58%),radial-gradient(ellipse at 62% 75%,#153ba438,transparent 70%),#080b10}
+
+/* Brand-kit application and a shared scene position for the enquiry handoff. */
+.journey{--ui-font:var(--font-ui);background:#101f38;color:#f7f9fc}
+.journey .space{background:radial-gradient(ellipse at 80% 12%,#234d8d77,transparent 58%),radial-gradient(ellipse at 55% 85%,#0835b15c,transparent 70%),#101f38}
+.journey .wordmark{font-family:var(--font-heading);font-weight:750;letter-spacing:-.065em}
+.journey .wordmark small{color:var(--brand-gold);font-family:var(--font-ui)}
+.journey .copy h1,.journey .mapCopy h2{font-family:var(--font-heading);font-weight:650;letter-spacing:-.055em}
+.journey .copy h1 .headingAccent{color:var(--brand-pale)}
+.journey .description,.journey .approachIntro>p:not(.eyebrow){font-family:var(--font-body);color:#cddcf0}
+.journey .animatedCta{background:var(--brand-yellow);border-color:var(--brand-yellow);color:#172c4a}
+.journey .animatedCta:is(:hover,:focus-visible){background:#ffe28a;border-color:#ffe28a;color:#172c4a}
+.journey .animatedCtaSecondary{background:#17345b55;border-color:#90b5e666;color:#e8f2ff}
+.journey .animatedCtaSecondary:is(:hover,:focus-visible){background:#254b7e;border-color:#a7ccff;color:#fff}
+.journey .mapCopy h2 span{color:var(--brand-pale)}
+.journey .mapCopy,.journey[data-form-open="true"] .mapCopy{left:4%;top:17%;bottom:6%;width:28%;transform:none}
+.approachIntro{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start}
+.enquiryPanel{position:absolute;inset:0;height:100%;padding-bottom:8px}
+.routeCaption{color:#ffe3a0;left:34%;right:1%;bottom:14%}
+.journey .mapCopy .enquiryPanel h2{font-family:var(--font-ui);font-size:clamp(25px,2.1vw,34px);letter-spacing:-.04em;margin:0}
+@media(max-width:767px){
+ .journey .mapCopy,.journey[data-form-open="true"] .mapCopy{left:6%;top:50%;bottom:3%;width:88%}
+ .journey .mapCopy h2{font-size:clamp(24px,6.2vw,32px);line-height:1.12}
+ .approachIntro{justify-content:center}
+ .routeCaption{left:3%;right:3%;top:44%;bottom:auto}
+}
+@media(prefers-reduced-motion:reduce){
+ .journey .mapCopy,.journey[data-form-open="true"] .mapCopy{position:relative;inset:auto;width:auto;margin:0 6% 60px}
+ .approachIntro,.enquiryPanel{position:relative;inset:auto;height:auto}
+ .approachIntro[aria-hidden="true"],.enquiryPanel[aria-hidden="true"]{display:none}
+}
+.journey[data-globe-state="fallback"] .mapCopy{position:relative;inset:auto;width:auto;margin:0 6% 60px}
+.journey[data-globe-state="fallback"] .approachIntro,.journey[data-globe-state="fallback"] .enquiryPanel{position:relative;inset:auto;height:auto}
+.journey[data-globe-state="fallback"] [aria-hidden="true"].approachIntro,.journey[data-globe-state="fallback"] [aria-hidden="true"].enquiryPanel{display:none}
