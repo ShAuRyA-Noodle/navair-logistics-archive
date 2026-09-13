@@ -10,5 +10,15 @@
 .caption h2{font-size:clamp(24px,3.3vw,54px);font-weight:500;letter-spacing:-.045em;line-height:1.08;margin:14px 0 0}
 .scene:focus-visible{outline:2px solid #d6bd88;outline-offset:-4px}
 .scene[data-failed="true"]{height:100svh}
-@media(max-aspect-ratio:1/1){.poster,.video{object-fit:contain}.caption{left:6vw;bottom:9svh}.stage::after{background:linear-gradient(180deg,#080b10,transparent 25%,transparent 75%,#080b10)}}
+.status{font-size:12px;line-height:1.5;letter-spacing:.02em;color:#d9dedf;margin:0 0 16px}
+@media(max-aspect-ratio:1/1){
+ .scene{height:380svh}
+ .stage{display:flex;flex-direction:column;justify-content:center;align-items:stretch;gap:clamp(24px,5svh,48px);padding:48px 0}
+ .stage::before{content:'';position:absolute;inset:-30px;background:url('/video/scene01-poster.jpg') center/cover;filter:blur(28px);opacity:.15;pointer-events:none}
+ .film{position:relative;inset:auto;aspect-ratio:16/9;width:100%;flex:none;z-index:1}
+ .poster,.video{object-fit:contain}
+ .caption{position:relative;left:auto;bottom:auto;padding:0 6vw;flex:none}
+ .caption h2{font-size:clamp(24px,7vw,38px)}
+ .stage::after{background:linear-gradient(180deg,#080b1099,transparent 40%,#080b1080)}
+}
 @media(prefers-reduced-motion:reduce){.scene{height:100svh}.stage{position:relative}.video{display:none}.caption{transition:none}}
