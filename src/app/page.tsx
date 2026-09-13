@@ -16,6 +16,6 @@ export default function Home() {
   return <div className={styles.home}>
     <GlobeHero />
     <SceneOne />
-    <footer className={styles.footer}><Link href="/" className={styles.footerBrand}>NAVAIR</Link><p>Global movement. Personal responsibility.</p><Link href="/first-time-exporter">START AN ENQUIRY ↗</Link><small>Globe routes are illustrative. Country data: <a href="https://github.com/mledoze/countries">mledoze/countries</a> · <a href="/licenses/countries.txt">ODbL 1.0</a></small></footer>
+    <footer className={styles.footer}><Link href="/" className={styles.footerBrand}>NAVAIR</Link><p>Global movement. Personal responsibility.</p><a href="#enquiry">START AN ENQUIRY ↗</a><small>Globe routes are illustrative. Country data: <a href="https://github.com/mledoze/countries">mledoze/countries</a> · <a href="/licenses/countries.txt">ODbL 1.0</a></small></footer>
   </div>;
 }

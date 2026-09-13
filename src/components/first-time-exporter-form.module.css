@@ -120,3 +120,8 @@
 .countryField select,.countryField input { border:1px solid var(--line); border-radius:8px; font-size:1rem; min-height:49px; padding:.75rem .85rem; width:100%; }
 .countryField select { cursor:pointer; text-overflow:ellipsis; }
 @media (prefers-reduced-motion:reduce) { .embedded .actions button,.embedded .choice { transition:none; } .embedded .actions button:hover:not(:disabled) { transform:none; } }
+
+/* Keep the enquiry part of the world-map scene, without an inset page shell. */
+.embedded{--green:#8ce9c0;--green-wash:rgba(110,232,180,.1);--navy:#b0efda;background:transparent;border:0;border-radius:0;padding:0;box-shadow:none}
+.embeddedHeader{display:none}
+.embedded .question{font-size:clamp(26px,2.2vw,36px)}

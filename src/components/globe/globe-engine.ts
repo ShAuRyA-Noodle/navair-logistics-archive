@@ -97,11 +97,11 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
           float facing = max(0.0, vNormal.z);
           float rim = pow(1.0 - facing, 3.2);
           vec3 blue = vec3(0.014, 0.058, 0.17);
-          vec3 warm = vec3(0.16, 0.035, 0.006);
+          vec3 warm = vec3(0.008, 0.15, 0.075);
           vec3 edge = mix(blue, warm, smoothstep(-0.15, 0.7, vNormal.y));
           float grain = fract(sin(dot(vPosition.xy, vec2(127.1, 311.7))) * 43758.5453);
           vec3 base = vec3(0.006, 0.008, 0.013) + grain * 0.002;
-          gl_FragColor = vec4(base + edge * rim * 0.65, uOpacity);
+          gl_FragColor = vec4(base + edge * rim * 0.85, uOpacity);
         }
       `,
     });
@@ -170,7 +170,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
           float distance = length(gl_PointCoord - 0.5);
           float dotAlpha = 1.0 - smoothstep(0.30, 0.5, distance);
           float edge = smoothstep(0.015, 0.26, vFacing);
-          gl_FragColor = vec4(vec3(1.0) * vShade, dotAlpha * edge * vOpacity * mix(1.0, 0.28, uFocus));
+          gl_FragColor = vec4(vec3(0.91, 1.0, 0.98) * min(1.0, vShade * 1.16), dotAlpha * edge * vOpacity * mix(1.0, 0.28, uFocus));
         }
       `,
     });
@@ -198,7 +198,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
           float outer = smoothstep(0.935, 1.002, r);
           float vertical = vPoint.y / max(r, 0.001);
           vec3 blue = vec3(0.015, 0.19, 1.0);
-          vec3 warm = vec3(1.0, 0.25, 0.032);
+          vec3 warm = vec3(0.06, 0.95, 0.52);
           vec3 color = mix(blue, warm, smoothstep(-0.24, 0.48, vertical));
           float intensity = 0.44 + 0.56 * abs(vertical);
           float opacity = (edge * 0.72 + halo * 0.22) * outer * intensity;
@@ -226,7 +226,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       const element = document.createElement('span');
       element.textContent = name;
       element.setAttribute('aria-hidden', 'true');
-      element.style.cssText = 'position:absolute;left:0;top:0;z-index:2;display:block;opacity:0;transition:opacity .45s cubic-bezier(.22,1,.36,1);pointer-events:none;white-space:nowrap;padding:6px 9px;border-radius:7px;background:rgba(7,9,12,.76);border:1px solid rgba(255,255,255,.075);color:#fff8ef;font:400 10px/1.2 "IBM Plex Mono",monospace;letter-spacing:.025em;text-shadow:0 0 8px rgba(255,222,166,.16);will-change:transform,opacity';
+      element.style.cssText = 'position:absolute;left:0;top:0;z-index:2;display:block;opacity:0;transition:opacity .45s cubic-bezier(.22,1,.36,1);pointer-events:none;white-space:nowrap;padding:6px 9px;border-radius:7px;background:rgba(7,9,12,.76);border:1px solid rgba(255,255,255,.075);color:#fff8ef;font:400 10px/1.2 "IBM Plex Mono",monospace;letter-spacing:.025em;text-shadow:0 0 8px rgba(125,255,204,.2);will-change:transform,opacity';
       labelElements.push(element);
       host.appendChild(element);
       return { element, labelWidth: name.length * 6.3 + 20, position: location(latitude, longitude, 1.02), flat: new THREE.Vector3(...flatLocation(latitude, longitude)) };
@@ -300,9 +300,9 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
             * (1.0 - smoothstep(0.035, 0.34, behind));
           float tip = exp(-pow((behind - 0.023) / 0.024, 2.0));
           float middle = sin(vAlong * 3.14159);
-          vec3 gold = mix(vec3(0.95, 0.48, 0.015), vec3(1.0, 0.78, 0.08), middle);
-          vec3 color = mix(gold, vec3(1.0, 0.84, 0.18), streak);
-          color = mix(color, vec3(1.0, 0.95, 0.60), tip * 0.9);
+          vec3 gold = mix(vec3(0.04, 0.48, 0.95), vec3(0.12, 0.95, 0.62), middle);
+          vec3 color = mix(gold, vec3(0.35, 1.0, 0.78), streak);
+          color = mix(color, vec3(0.8, 1.0, 0.94), tip * 0.9);
           gl_FragColor = vec4(color, (0.22 + streak * 0.78) * uOpacity);
         }
       `,
@@ -340,7 +340,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       globe.add(route);
     }
     const nodeGeometry = new THREE.SphereGeometry(0.008, 12, 8);
-    const nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xffad32, transparent: true });
+    const nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x64edb4, transparent: true });
     const nodes = labelPlaces.map(([, latitude, longitude]) => {
       const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
       node.position.copy(location(latitude, longitude, 1.011));
@@ -357,7 +357,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       uniforms: { uSize: { value: 24 }, uMorph: morph, uFocus: focus },
       vertexShader: `uniform float uSize; uniform float uMorph; attribute vec3 flatPosition; void main() { vec4 p = viewMatrix * mix(modelMatrix * vec4(position, 1.0), vec4(flatPosition, 1.0), uMorph); gl_Position = projectionMatrix * p; gl_PointSize = uSize * (2.28 / -p.z); }`,
-      fragmentShader: `uniform float uFocus; void main() { float r = length(gl_PointCoord - 0.5) * 2.0; float glow = exp(-r * r * 5.5) * (1.0 - smoothstep(0.65, 1.0, r)); gl_FragColor = vec4(1.0, 0.36, 0.025, glow * 0.38 * (1.0 - uFocus)); }`,
+      fragmentShader: `uniform float uFocus; void main() { float r = length(gl_PointCoord - 0.5) * 2.0; float glow = exp(-r * r * 5.5) * (1.0 - smoothstep(0.65, 1.0, r)); gl_FragColor = vec4(0.08, 0.9, 0.55, glow * 0.38 * (1.0 - uFocus)); }`,
     });
     const halos = new THREE.Points(glowGeometry, glowMaterial);
     halos.frustumCulled = false;
@@ -376,7 +376,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
           vec4 world = mix(modelMatrix * vec4(position,1.0),vec4(flatPosition,1.0),uMorph);
           gl_Position = projectionMatrix * viewMatrix * world;
           gl_PointSize = uSize * mix(1.0, 2.6, selected * uFocus); }`,
-      fragmentShader: `varying float vSelected; varying float vOpacity; void main() { float r=length(gl_PointCoord-.5); float alpha=1.0-smoothstep(.22,.5,r); gl_FragColor=vec4(mix(vec3(.72,.61,.4),vec3(1.,.79,.36),vSelected),alpha*vOpacity); }`,
+      fragmentShader: `varying float vSelected; varying float vOpacity; void main() { float r=length(gl_PointCoord-.5); float alpha=1.0-smoothstep(.22,.5,r); gl_FragColor=vec4(mix(vec3(.28,.55,.65),vec3(.38,1.,.73),vSelected),alpha*vOpacity); }`,
     });
     const countryDots = new THREE.Points(countryGeometry, countryMaterial);
     countryDots.frustumCulled = false;
@@ -390,7 +390,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
     const selectedLabels = [0, 1].map(() => {
       const element = document.createElement('span');
       element.setAttribute('aria-hidden', 'true');
-      element.style.cssText = 'position:absolute;left:0;top:0;opacity:0;pointer-events:none;white-space:nowrap;padding:8px 11px;border:1px solid #e6b36555;border-radius:8px;background:#101319e8;color:#ffe2ac;font:500 12px/1.3 "Space Grotesk Variable",sans-serif;transition:opacity .3s;z-index:3';
+      element.style.cssText = 'position:absolute;left:0;top:0;opacity:0;pointer-events:none;white-space:nowrap;padding:8px 11px;border:1px solid #64edb455;border-radius:8px;background:#101319e8;color:#b8ffe1;font:500 12px/1.3 "Space Grotesk Variable",sans-serif;transition:opacity .3s;z-index:3';
       host.appendChild(element); labelElements.push(element);
       return { element, country: COUNTRIES[0], active: false };
     });
@@ -531,7 +531,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       camera.updateProjectionMatrix();
       const mobile = window.matchMedia('(max-width: 767px)').matches;
       isMobile = mobile;
-      restingCameraZ = mobile ? 2.7 : window.matchMedia('(max-width: 1024px)').matches ? 2.8 : 2.28;
+      restingCameraZ = mobile ? 2.62 : window.matchMedia('(max-width: 1024px)').matches ? 2.72 : 2.22;
       camera.position.z = restingCameraZ;
       atmosphere.scale.setScalar(camera.position.z / Math.sqrt(camera.position.z * camera.position.z - 1));
       const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 1.5);

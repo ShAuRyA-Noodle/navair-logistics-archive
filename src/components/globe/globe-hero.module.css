@@ -209,3 +209,9 @@
  .routeCaption{position:relative;top:auto;bottom:auto;left:auto;right:auto;margin:20px 6% 40px}
  .ctaLabel>span,.journey .ctaArrow svg{transition:none}
 }
+
+.routeCaption{color:#b8ffe1}
+.enquiryPanel{scrollbar-width:none;padding-right:0}
+.enquiryPanel::-webkit-scrollbar{display:none}
+
+.journey .space{background:radial-gradient(ellipse at 80% 8%,#176b4926,transparent 58%),radial-gradient(ellipse at 62% 75%,#153ba438,transparent 70%),#080b10}

@@ -100,7 +100,7 @@ export function GlobeHero() {
           const destination = width * (small ? 0.5 : 0.69);
           const x = (width / 2 - initialCentre) * state.centre + (destination - width / 2) * state.dock;
           // At the final camera distance, the map occupies about 82% of the canvas.
-          const finalScale = Math.min(1.1, width * (small ? 0.9 : 0.55) / (globeWidth * 0.82));
+          const finalScale = Math.min(1.1, width * (small ? 0.98 : 0.59) / (globeWidth * 0.82));
           const centreScale = Math.min(1, width * 0.9 / globeWidth);
           const scale = 1 + (centreScale - 1) * state.centre + (finalScale - centreScale) * state.dock;
           stage.current?.style.setProperty('--departure', String(state.centre));
@@ -170,6 +170,17 @@ export function GlobeHero() {
     if (smoothScroll.current) smoothScroll.current.scrollTo(target, { duration: 1.15, lerp: 0, onComplete: reveal });
     else { window.scrollTo({ top: target, behavior: 'instant' }); reveal(); }
   }
+  useEffect(() => {
+    const onEnquiryLink = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)) return;
+      const link = event.target.closest('a[href="#enquiry"]');
+      if (!link) return;
+      event.preventDefault(); openEnquiry();
+    };
+    document.addEventListener('click', onEnquiryLink);
+    return () => document.removeEventListener('click', onEnquiryLink);
+  }, [reduced, failed]);
+
   function closeEnquiry() {
     setFormOpen(false);
     requestAnimationFrame(() => approach.current?.querySelector('button')?.focus({ preventScroll: true }));
@@ -229,7 +240,7 @@ export function GlobeHero() {
     <div className={styles.mapCopy} ref={approach} inert={!reduced && !failed}>
       <div hidden={formOpen} className={styles.approachIntro}>
       <p className={styles.eyebrow}>THE NAVAIR APPROACH</p>
-      <h2>THE WORLD IS<br />COMPLICATED.<br /><span>LET’S FIND<br />YOUR WAY.</span></h2>
+      <h2>THE WORLD IS <br />COMPLICATED.<br /><span>LET’S FIND <br />YOUR WAY.</span></h2>
       <p>Every journey starts with the right questions. Share your origin, destination and cargo details. We’ll bring the essentials together.</p>
       <AnimatedCta onClick={openEnquiry}>Start a conversation</AnimatedCta>
       <small>Routes shown are illustrative.</small>

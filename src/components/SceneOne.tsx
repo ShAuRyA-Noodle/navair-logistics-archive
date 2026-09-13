@@ -2,9 +2,18 @@
 
 import { useEffect, useRef, useState } from 'react';
 import styles from './scene-one.module.css';
+import dynamic from 'next/dynamic';
+const CanvasScene = dynamic(() => import('./scene/CanvasScene'), { ssr: false, loading: () => <section id="services" className={styles.scene} aria-label="Airport scene preparing" /> });
+
+export function SceneOne() {
+  const [canvasMode, setCanvasMode] = useState<boolean | null>(null);
+  useEffect(() => { setCanvasMode(new URLSearchParams(location.search).get('scene') === 'canvas'); }, []);
+  if (canvasMode === null) return <section id="services" className={styles.scene} aria-label="Airport scene preparing" />;
+  return canvasMode ? <CanvasScene /> : <VideoScene />;
+}
 
 /** Seek only after the previous frame decoded; rapid input always keeps the latest target. */
-export function SceneOne() {
+function VideoScene() {
   const section = useRef<HTMLElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
@@ -41,8 +50,15 @@ export function SceneOne() {
         objectUrl = URL.createObjectURL(blob);
         film.src = objectUrl;
         film.load();
-      }).catch(() => {
-        if (!disposed) { setLoading(false); setFailed(true); }
+      }).catch((error: unknown) => {
+        if (!disposed) {
+          root.dataset.loadError = error instanceof Error ? error.message : 'Video download failed';
+          // A failed bulk fetch must not permanently strand users on the poster.
+          // Let the browser's media loader retry with ordinary range requests.
+          film.preload = 'auto';
+          film.src = source;
+          film.load();
+        }
       });
     }
     void Promise.all([import('gsap'), import('gsap/ScrollTrigger')]).then(([{gsap}, {ScrollTrigger}]) => {
@@ -74,7 +90,7 @@ export function SceneOne() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className={styles.poster} src="/video/scene01-poster.jpg" alt="Navair aircraft on the airport runway" />
         <video ref={video} className={styles.video} data-ready={ready && !failed} muted playsInline preload="none"
-          poster="/video/scene01-poster.jpg" onLoadedData={() => { setReady(true); setLoading(false); }} onError={() => { setFailed(true); setLoading(false); }} aria-hidden="true">
+          poster="/video/scene01-poster.jpg" onLoadedData={() => { setReady(true); setLoading(false); setFailed(false); }} onError={() => { setFailed(true); setLoading(false); }} aria-hidden="true">
         </video>
       </div>
       <div className={styles.caption}>{loading && <p className={styles.status} role="status">Preparing your flight…</p>}<span>NAVAIR · 01</span><h2>Every journey begins<br />with a clear direction.</h2></div>
