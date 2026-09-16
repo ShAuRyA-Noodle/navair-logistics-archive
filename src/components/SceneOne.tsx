@@ -26,6 +26,8 @@ function VideoFilm() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [progress, setProgress] = useState(0);
   const [ended, setEnded] = useState(false);
+  const [playNotice, setPlayNotice] = useState('');
+  const [scrollUnavailable, setScrollUnavailable] = useState(false);
   const [chapter, setChapter] = useState(FALLBACK.chapters[0]);
 
   const applyTarget = useCallback(() => {
@@ -42,6 +44,17 @@ function VideoFilm() {
     if (!root || !film) return;
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
     let disposed = false, request: AbortController | undefined, killTrigger: (() => void) | undefined;
+    let nativeFallback = false;
+    const source = matchMedia('(max-width: 760px)').matches ? '/video/navair-film-mobile.mp4?v=movie-0-v4' : '/video/navair-film-desktop.mp4?v=movie-0-v4';
+    const useNativeSource = () => {
+      if (disposed) return;
+      nativeFallback = true;
+      film.pause(); film.removeAttribute('src');
+      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+      objectUrl.current = null;
+      setStatus('loading'); filmReadiness.set('loading');
+      film.preload = 'auto'; film.src = source; film.load();
+    };
     const updateChapter = (time: number) => {
       let active = metadata.current.chapters[0] ?? FALLBACK.chapters[0];
       for (const item of metadata.current.chapters) if (item.time <= time) active = item;
@@ -50,7 +63,7 @@ function VideoFilm() {
     const loadFilm = () => {
       if (disposed || request || objectUrl.current || film.src) return;
       request = new AbortController(); setStatus('loading'); filmReadiness.set('loading');
-      const source = matchMedia('(max-width: 760px)').matches ? '/video/navair-film-mobile.mp4?v=movie-0-v4' : '/video/navair-film-desktop.mp4?v=movie-0-v4';
+      nativeFallback = false; setPlayNotice('');
       void Promise.all([
         fetch('/video/navair-film.json?v=movie-0-v4', { signal: request.signal }).then(r => r.ok ? r.json() as Promise<FilmMetadata> : FALLBACK).catch(() => FALLBACK),
         fetch(source, { signal: request.signal }).then(r => { if (!r.ok) throw new Error(String(r.status)); return r.blob(); }),
@@ -59,16 +72,26 @@ function VideoFilm() {
         metadata.current = { duration: details.duration || 31.25, fps: details.fps || 24, chapters: details.chapters?.length ? details.chapters : FALLBACK.chapters };
         targetTime.current = scrollProgress.current * metadata.current.duration;
         updateChapter(targetTime.current);
-        objectUrl.current = URL.createObjectURL(blob); film.src = objectUrl.current; film.load();
-      }).catch(() => { if (!disposed) { setStatus('error'); filmReadiness.set('error'); } request = undefined; });
+        objectUrl.current = URL.createObjectURL(blob); film.preload = 'auto'; film.src = objectUrl.current; film.load();
+      }).catch(() => { request = undefined; if (!disposed) useNativeSource(); });
     };
-    loadRef.current = loadFilm;
+    loadRef.current = () => {
+      // A real retry must reset a failed source, not be blocked by its old URL.
+      if (film.error) {
+        request?.abort(); request = undefined;
+        film.removeAttribute('src');
+        if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+        objectUrl.current = null;
+      }
+      loadFilm();
+    };
     const onReady = () => { setStatus('ready'); filmReadiness.set('ready'); modeRef.current === 'play' ? void film.play().catch(() => { modeRef.current = 'scroll'; setMode('scroll'); applyTarget(); }) : applyTarget(); };
     const onTime = () => { updateChapter(film.currentTime); if (modeRef.current === 'play') { const d = film.duration || metadata.current.duration; setProgress(film.currentTime / d); } };
     // Hold the arrival frame until the viewer explicitly resumes scrolling.
     const onEnded = () => { setEnded(true); setProgress(1); updateChapter(metadata.current.duration); };
     const onError = () => {
-      if (!film.src) return;
+      if (disposed || !film.src) return;
+      if (!nativeFallback) { useNativeSource(); return; }
       film.pause(); film.removeAttribute('src');
       if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
       objectUrl.current = null; request = undefined; setStatus('error'); filmReadiness.set('error');
@@ -84,7 +107,7 @@ function VideoFilm() {
         onRefresh: self => { scrollProgress.current = self.progress; targetTime.current = self.progress * metadata.current.duration; if (modeRef.current === 'scroll') applyTarget(); },
       });
       killTrigger = () => trigger.kill();
-    }).catch(() => setStatus('error'));
+    }).catch(() => { if (!disposed) setScrollUnavailable(true); });
     return () => {
       disposed = true; killTrigger?.(); request?.abort(); loadRef.current = null; film.pause();
       film.removeEventListener('loadeddata', onReady); film.removeEventListener('seeked', applyTarget); film.removeEventListener('timeupdate', onTime); film.removeEventListener('ended', onEnded); film.removeEventListener('error', onError);
@@ -94,7 +117,16 @@ function VideoFilm() {
 
   const chooseMode = (next: Mode) => {
     const film = videoRef.current; modeRef.current = next; setMode(next); setEnded(false); loadRef.current?.(); if (!film) return;
-    if (next === 'play') { if (film.ended) film.currentTime = 0; if (film.readyState >= 2) void film.play().catch(() => setStatus('error')); }
+    if (next === 'play') { if (film.ended) film.currentTime = 0; if (film.readyState >= 2) {
+      setPlayNotice('');
+      void film.play().catch(() => {
+        // Pause/load/gesture interruptions do not mean the media is unavailable.
+        if (modeRef.current !== 'play') return;
+        modeRef.current = 'scroll'; setMode('scroll');
+        setPlayNotice('Playback paused. Press Play film to continue.');
+        applyTarget();
+      });
+    } }
     else { film.pause(); targetTime.current = scrollProgress.current * metadata.current.duration; setProgress(scrollProgress.current); applyTarget(); }
   };
 
@@ -107,9 +139,11 @@ function VideoFilm() {
       </div>
       <div className={styles.controls} data-lenis-prevent>
         <div className={styles.modePicker} role="group" aria-label="Film controls">
-          <button type="button" aria-pressed={mode === 'scroll'} onClick={() => chooseMode('scroll')}>Explore with scroll</button>
+          <button type="button" aria-pressed={mode === 'scroll'} disabled={scrollUnavailable} onClick={() => chooseMode('scroll')}>Explore with scroll</button>
           <button type="button" aria-pressed={mode === 'play'} onClick={() => chooseMode('play')}>{ended ? 'Replay film' : mode === 'play' ? 'Playing film' : 'Play film'}</button>
         </div>
+        {playNotice && <span className={styles.status} role="status">{playNotice}</span>}
+        {scrollUnavailable && <span className={styles.status} role="status">Use Play film to watch the journey.</span>}
         {status === 'loading' && <span className={styles.status} role="status">Preparing film…</span>}
         {status === 'error' && <button type="button" className={styles.retry} onClick={() => { setStatus('idle'); loadRef.current?.(); }}>Film unavailable · Retry</button>}
       </div>
