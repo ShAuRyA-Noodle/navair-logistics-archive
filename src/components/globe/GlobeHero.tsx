@@ -5,8 +5,11 @@ import dynamic from 'next/dynamic';
 import { motion } from 'motion/react';
 import type Lenis from 'lenis';
 import { AnimatedCta } from './AnimatedCta';
+import { HeroAtmosphere } from './HeroAtmosphere';
+import { NavLabel } from './NavLabel';
+import { FreightLoader } from './FreightLoader';
 import { COUNTRY_BY_CODE } from './countries';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import styles from './globe-hero.module.css';
 import { transitionAt } from './globe-transition';
 import type { createGlobe } from './globe-engine';
@@ -36,7 +39,10 @@ export function GlobeHero() {
   const [failed, setFailed] = useState(false);
   const [reduced, setReduced] = useState(false);
   const [assetsReady, setAssetsReady] = useState(false);
-  const loading = !failed && (!ready || !assetsReady);
+  const [introDone, setIntroDone] = useState(false);
+  const sceneLoading = !failed && (!ready || !assetsReady);
+  const loading = sceneLoading || !introDone;
+  const finishIntro = useCallback(() => setIntroDone(true), []);
 
   useEffect(() => {
     let disposed = false;
@@ -53,23 +59,24 @@ export function GlobeHero() {
   }, []);
 
   useEffect(() => {
-    if (!loading) return;
+    if (!sceneLoading) return;
     // A failed GPU or asset request must never trap visitors behind the loader.
     const timeout = window.setTimeout(() => { setAssetsReady(true); setFailed(true); }, 12000);
     return () => window.clearTimeout(timeout);
-  }, [loading]);
+  }, [sceneLoading]);
 
   useEffect(() => {
     const media = matchMedia('(prefers-reduced-motion: reduce)');
     let disposed = false;
     let stopScroll: (() => void) | undefined;
-    const syncMotion = () => { setReduced(media.matches); engine.current?.setReducedMotion(media.matches); engine.current?.setPaused(media.matches); };
+    const syncMotion = () => { setReduced(media.matches); engine.current?.setReducedMotion(media.matches);  };
     syncMotion();
     media.addEventListener('change', syncMotion);
     void import('./globe-engine').then(({ createGlobe }) => {
       if (disposed || !globeHost.current) return;
       engine.current = createGlobe(globeHost.current, {
         reducedMotion: media.matches,
+        paused: true,
         onReady: () => { if (!disposed) { setReady(true); setFailed(false); } },
         onError: () => { if (!disposed) setFailed(true); },
       });
@@ -104,13 +111,13 @@ export function GlobeHero() {
           const finalScale = width * (small ? 0.96 : 0.68) / (globeWidth * 0.82);
           const centreScale = Math.min(1, width * 0.9 / globeWidth);
           const scale = 1 + (centreScale - 1) * state.centre + (finalScale - centreScale) * state.dock;
-          stage.current?.style.setProperty('--departure', String(state.centre));
-          stage.current?.style.setProperty('--map-copy', String(state.copy));
+          heroCopy.current?.style.setProperty('--departure', String(state.centre));
+          approach.current?.style.setProperty('--map-copy', String(state.copy));
           globePosition.current?.style.setProperty('--globe-x', `${x}px`);
           globePosition.current?.style.setProperty('--globe-y', `${small ? -height * 0.14 * state.dock : 0}px`);
           globePosition.current?.style.setProperty('--globe-scale', String(scale));
-          if (approach.current) approach.current.inert = state.copy < 0.75;
-          if (heroCopy.current) heroCopy.current.inert = state.centre > 0.9;
+          if (approach.current && approach.current.inert !== (state.copy < 0.75)) approach.current.inert = state.copy < 0.75;
+          if (heroCopy.current && heroCopy.current.inert !== (state.centre > 0.9)) heroCopy.current.inert = state.centre > 0.9;
         };
         const measure = () => {
           if (!stage.current || !globePosition.current) return;
@@ -158,10 +165,12 @@ export function GlobeHero() {
     engine.current?.setRoute(formOpen ? selectedRoute.originCode : '', formOpen ? selectedRoute.destinationCode : '');
   }, [formOpen, selectedRoute, ready]);
 
-  // Warm and mount the form before the first interaction, after the globe is ready.
+  useEffect(() => { engine.current?.setPaused(!introDone || reduced); }, [introDone, reduced, ready]);
+
+  // Warm the form code without mounting its hidden DOM into the scroll animation tree.
   useEffect(() => {
     if (loading) return;
-    const warmup = window.setTimeout(() => setFormMounted(true), 250);
+    const warmup = window.setTimeout(() => { void import('../first-time-exporter-form'); }, 500);
     return () => window.clearTimeout(warmup);
   }, [loading]);
 
@@ -200,29 +209,22 @@ export function GlobeHero() {
   function skip() { closeMenu(); document.getElementById('services')?.focus({ preventScroll: true }); }
 
   return <div className={styles.journey} ref={root} data-form-open={formOpen} data-presented={!loading} data-globe-state={failed ? 'fallback' : ready ? 'ready' : 'loading'}>
-    <div className={`${styles.loader} ${!loading ? styles.loaderComplete : ''}`} data-navair-loader aria-hidden={!loading}>
-      <div className={styles.loaderIdentity}>
-        <span className={styles.loaderBrand}>NAVAIR</span>
-        <span className={styles.loaderCaption}>DISTANCE DESERVES DIRECTION.</span>
-        <span className={styles.loaderTrack} aria-hidden="true"><i /></span>
-        <span className={styles.loaderStatus} role="status">{loading ? 'Preparing your world' : 'Ready to explore'}</span>
-      </div>
-    </div>
+    <FreightLoader sceneReady={!sceneLoading} reduced={reduced} onComplete={finishIntro} />
     <noscript><style>{'[data-navair-loader]{display:none!important}'}</style></noscript>
     <div className={styles.approachAnchor} id="approach" aria-hidden="true" />
     <section className={styles.hero} ref={stage} aria-labelledby="globe-heading" data-globe-state={failed ? 'fallback' : ready ? 'ready' : 'loading'}>
     <a className={styles.skip} href="#services" onClick={skip}>Skip to freight services</a>
     <header className={styles.header}>
-      <Link href="/" className={styles.wordmark} aria-label="Navair logistics home"><span>NAVAIR</span><small>LOGISTICS</small></Link>
+      <Link href="/" className={styles.wordmark} aria-label="Navair logistics home"><span>NAVAIR</span><small><span>LOGISTICS</span><span aria-hidden="true">LOGISTICS</span></small><i className={styles.brandRoute} aria-hidden="true" /></Link>
       <nav className={styles.desktopNav} aria-label="Homepage navigation">
-        <a href="#approach"><span>Our approach</span></a>
-        <a href="#services"><span>Freight services</span></a>
-        <Link href="/forecast"><span>Route forecasts</span></Link>
-        <Link href="/news"><span>Trade watch</span></Link>
+        <a href="#approach"><NavLabel text="Our approach" /></a>
+        <a href="#services"><NavLabel text="Freight services" /></a>
+        <Link href="/forecast"><NavLabel text="Route forecasts" /></Link>
+        <Link href="/news"><NavLabel text="Trade watch" /></Link>
       </nav>
       <AnimatedCta className={styles.talkCta} onClick={openEnquiry}>Let’s talk</AnimatedCta>
       <details className={styles.mobileMenu} ref={menu} onKeyDown={(event) => { if (event.key === 'Escape') { closeMenu(); menu.current?.querySelector('summary')?.focus(); } }}>
-        <summary><span className={styles.menuDots} aria-hidden="true">•••</span> MENU</summary>
+        <summary aria-label="Toggle navigation"><span className={styles.menuGlyph} aria-hidden="true"><i /><i /></span><span className={styles.menuLabel} aria-hidden="true"><span>MENU</span><span>CLOSE</span></span></summary>
         <nav aria-label="Mobile homepage navigation">
           <a href="#approach" onClick={closeMenu}>Our approach</a>
           <a href="#services" onClick={closeMenu}>Freight services</a>
@@ -233,14 +235,14 @@ export function GlobeHero() {
       </details>
     </header>
 
-    <div className={styles.space} aria-hidden="true"><div className={styles.starfield} /><div className={styles.horizon} /></div>
+    <HeroAtmosphere />
     <div className={`${styles.globePosition} ${ready && !failed ? styles.globeReady : ''}`} ref={globePosition} aria-hidden="true">
       {failed && <div className={styles.globeFallback}><div /><span /><i /></div>}
       <div className={styles.globeHost} ref={globeHost} />
     </div>
     <div className={styles.copy} ref={heroCopy}>
-      <p className={styles.eyebrow}><span /> GLOBAL REACH. A CLEAR WAY FORWARD.</p>
-      <h1 id="globe-heading"><span className={styles.headingLine}><span>DISTANCE</span></span><span className={styles.headingLine}><span>DESERVES</span></span><span className={styles.headingLine}><span className={styles.headingAccent}>DIRECTION.</span></span></h1>
+      <p className={styles.eyebrow}><span /> A CLEAR WAY FORWARD.</p>
+      <h1 id="globe-heading"><span className={styles.headingLine}><span>DISTANCE</span></span><span className={styles.headingLine}><span>DESERVES</span></span><span className={styles.headingLine}><span className={styles.headingAccent}>DIRECTION.<svg className={styles.headingMark} viewBox="0 0 600 30" preserveAspectRatio="none" aria-hidden="true"><path d="M4 19C130 5 367 4 593 12C430 10 267 17 171 23" pathLength="100"/></svg></span></span></h1>
       <p className={styles.description}>Your cargo. Your destination. Your timeline.<br />We bring clarity to everything in between.</p>
       <div className={styles.actions}>
         <AnimatedCta onClick={openEnquiry}>Start an enquiry</AnimatedCta>

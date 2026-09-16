@@ -1,0 +1,15 @@
+.accessible{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.window{display:block!important;position:relative;overflow:hidden;height:1.45em;line-height:1.45;transform:none!important}
+.row{display:flex!important;white-space:pre;transform:none!important}
+.incoming{position:absolute;inset:0;color:#edcf91}
+.window .row .letter{display:block;transform:translateY(0);transition:transform .7s cubic-bezier(.22,1,.36,1);transition-delay:calc(var(--letter)*12ms)}
+.window .incoming .letter{transform:translateY(115%)}
+:global(a:is(:hover,:focus-visible)) .window .row .letter{transform:translateY(-115%)}
+:global(a:is(:hover,:focus-visible)) .window .incoming .letter{transform:translateY(0)}
+@media(prefers-reduced-motion:reduce){.window .row .letter{transition:none;transform:none!important}.incoming{display:none!important}}
+@media(hover:none){.window .row .letter{transform:none!important}.incoming{display:none!important}}
+
+.underline.underline{position:absolute;left:-3px;bottom:2px;width:calc(100% + 6px);height:11px;overflow:visible;pointer-events:none}
+.underline path{stroke:#ddbd77;stroke-width:1;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;transition:stroke-dashoffset .6s cubic-bezier(.65,0,.35,1)}
+:global(a:is(:hover,:focus-visible)) .underline path{stroke-dashoffset:0}
+@media(prefers-reduced-motion:reduce){.underline path{transition:none}}

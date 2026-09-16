@@ -5,3 +5,9 @@
 /* Keep the progress display clear of the persistent chat companion. */
 .timeline{bottom:max(102px,calc(env(safe-area-inset-bottom) + 88px))}
 @media(max-aspect-ratio:1/1){.timeline{grid-template-columns:1fr auto;row-gap:12px}.chapter{grid-column:1;grid-row:1;max-width:none;overflow:visible}.title{grid-column:1/-1;grid-row:2}.percent{grid-column:2;grid-row:1}.track{grid-row:3}}
+
+.comparisonLink{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;border:1px solid #ffffff55;border-radius:999px;background:#04101ec9;color:#fff;font:600 12px/1.3 var(--font-ui);text-decoration:none}
+.comparisonLink:focus-visible{outline:2px solid #ffe3a0;outline-offset:3px}
+.frameControl{grid-column:1/-1;display:flex;align-items:center;gap:12px;font:500 11px/1.4 var(--font-ui);color:#fff}
+.frameControl input{flex:1;min-width:0;height:32px;accent-color:#ffe3a0;cursor:pointer}
+@media(max-aspect-ratio:1/1){.frameControl{grid-row:4}}

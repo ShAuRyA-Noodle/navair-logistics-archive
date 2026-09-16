@@ -1,7 +1,7 @@
 {
-  "version": "movie-0-v2",
+  "version": "movie-0-v4",
   "fps": 24,
-  "duration": 30.083333333333332,
+  "duration": 31.25,
   "transition": {
     "start": 14.25,
     "end": 15.083333333333334,
@@ -38,6 +38,9 @@
     "scene01": "Scene_01.mp4",
     "scene02": "Scene_02-A.mp4",
     "scene02In": 0,
+    "landingCut": 13.041666666666666,
+    "landingBlend": 0.375,
+    "landingStretch": 1.75,
     "scene02BUsed": false
   }
 }

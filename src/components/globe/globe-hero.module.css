@@ -248,3 +248,161 @@
 .journey[data-globe-state="fallback"] .mapCopy{position:relative;inset:auto;width:auto;margin:0 6% 60px}
 .journey[data-globe-state="fallback"] .approachIntro,.journey[data-globe-state="fallback"] .enquiryPanel{position:relative;inset:auto;height:auto}
 .journey[data-globe-state="fallback"] [aria-hidden="true"].approachIntro,.journey[data-globe-state="fallback"] [aria-hidden="true"].enquiryPanel{display:none}
+
+/* Hero refinement — brand typography, orbital atmosphere, coordinated controls. */
+.journey{--gold:#ddbd77;--text:#f6f7f9;--muted:#c6d4e7}
+.journey .header{padding-top:30px;padding-bottom:24px;border-bottom:1px solid #cde7ff12;margin-inline:4.5%;padding-inline:0;gap:30px}
+.journey .wordmark{font-size:clamp(30px,2.9vw,46px);font-weight:700;letter-spacing:.035em;line-height:.96;gap:10px}
+.journey .wordmark small{font-size:9px;letter-spacing:.43em;margin-left:2px;color:#d5b674;transition:letter-spacing .6s var(--ease-out),color .4s}
+.journey .wordmark:hover small{color:#f4dca5}
+.journey .desktopNav{gap:clamp(18px,2vw,34px)}
+.journey .desktopNav a{font-size:clamp(12px,1vw,15px);font-weight:500;letter-spacing:.015em;color:#d7e1ed;min-height:48px}
+.journey .desktopNav a::after{height:1px;bottom:8px;background:linear-gradient(90deg,#a7cbf4,#ddbd77)}
+.journey .desktopNav a::before{content:'';position:absolute;left:50%;bottom:1px;width:3px;height:3px;border-radius:50%;background:#e0c48a;opacity:0;transform:translateY(5px);transition:opacity .35s,transform .5s var(--ease-out)}
+.journey .desktopNav a:is(:hover,:focus-visible)::before{opacity:1;transform:translateY(0)}
+.journey .copy{top:clamp(145px,20svh,210px);width:63%;bottom:5svh}
+.journey .copy h1{font-weight:600;letter-spacing:-.018em;line-height:1.08;font-size:clamp(40px,min(11.6cqw,10.9svh),134px);margin-bottom:28px}
+.journey .headingLine{overflow:hidden;padding:.06em .05em;margin:-.06em -.05em}
+.journey .copy h1 .headingAccent{color:#e6d3a6;background:linear-gradient(110deg,#fffaf0 3%,#e7d7ad 40%,#bf9d4c 85%);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.journey .eyebrow,.journey .copy .eyebrow{font-size:11px;letter-spacing:.18em;font-weight:500;color:#c1cde0;margin-bottom:26px}
+.journey .copy .eyebrow>span{width:5px;height:5px;background:#dfc18a;box-shadow:0 0 0 5px #dfc18a0c,0 0 18px #dfc18a77}
+.journey .description{font-size:clamp(15px,1.15vw,18px);line-height:1.85;letter-spacing:.015em;max-width:460px;color:#c3cee0}
+.journey .mapCopy h2{letter-spacing:-.018em;line-height:1.13}
+.journey .approachIntro>p:not(.eyebrow){letter-spacing:.01em;line-height:1.75}
+.journey .actions{gap:16px;margin-top:32px}
+.journey .animatedCta{gap:25px;min-height:58px;padding:10px 12px 10px 25px;font-weight:550;font-size:14px;letter-spacing:.01em;border:1px solid #e3c587;background:#e3c587;color:#14233c;transition:color .35s,border-color .35s,box-shadow .4s}
+.journey .animatedCta::before{content:'';position:absolute;inset:-1px;z-index:-1;background:#fff5df;border-radius:50%;transform:translateY(105%) scale(1.05);transition:transform .65s cubic-bezier(.16,1,.3,1),border-radius .65s}
+.journey .animatedCta:is(:hover,:focus-visible){background:#e3c587;border-color:#fff5df;color:#14233c;box-shadow:0 8px 30px #c7a85b18}
+.journey .animatedCta:is(:hover,:focus-visible)::before{transform:translateY(0) scale(1.05);border-radius:0}
+.journey .animatedCtaSecondary{background:#122a4529;border-color:#a4c6ed55;color:#eaf2ff}
+.journey .animatedCtaSecondary::before{background:#224369}
+.journey .animatedCtaSecondary:is(:hover,:focus-visible){background:#122a4529;border-color:#bad4f0;color:#fff}
+.journey .ctaArrow{width:34px;height:34px;border-radius:50%;background:#18314a;color:#f1d798;transition:background .45s,color .45s}
+.journey .ctaArrow svg{width:20px;height:20px;inset:7px}
+.journey .animatedCtaSecondary .ctaArrow{background:#ffffff10;color:#cde7ff}
+.journey .animatedCta:is(:hover,:focus-visible) .ctaArrow{background:#0835b1;color:#fff}
+.journey .talkCta{min-height:52px;font-size:13px;padding:7px 9px 7px 22px;gap:22px}
+.journey .space{overflow:hidden;background:#060e1c}
+.atmosphereLayers{position:absolute;inset:-16px;background:radial-gradient(ellipse at 75% 55%,#183a6d70,transparent 68%)}
+.nebula{position:absolute;inset:-8%;background:radial-gradient(ellipse at 79% 20%,#3168bd45,transparent 40%),radial-gradient(ellipse at 59% 90%,#153cb94a,transparent 47%),radial-gradient(ellipse at 85% 7%,#c2a36422,transparent 34%)}
+.journey .starfield{opacity:.8;background-size:clamp(1100px,105vw,1900px) auto;mask-image:linear-gradient(90deg,#0005,#000b 45%,#000)}
+.journey .starfield::after{background:radial-gradient(ellipse at 85% 5%,#a1c8ff16,transparent 55%)}
+.journey .horizon{width:100vw;height:100vw;right:-37vw;top:56%;background:radial-gradient(closest-side,#376bc226,transparent 75%)}
+.orbitalLines{position:absolute;inset:0;width:100%;height:100%;opacity:.52}
+.readingShade{position:absolute;inset:0;background:linear-gradient(90deg,#060e1cbb 0%,#060e1c66 29%,transparent 58%),linear-gradient(0deg,#060e1c66,transparent 25%)}
+.journey[data-presented="true"] .headingLine>span{animation-duration:1.2s;animation-timing-function:cubic-bezier(.16,1,.3,1)}
+.journey[data-presented="true"] .headingLine:nth-child(2)>span{animation-delay:.12s}
+.journey[data-presented="true"] .headingLine:nth-child(3)>span{animation-delay:.24s}
+.journey[data-presented="true"] .actions{animation-delay:.45s}
+.journey .mapCopy .enquiryPanel h2{letter-spacing:-.02em}
+@media(min-width:768px) and (max-width:1100px){.journey .copy{width:71%}.journey .copy h1{font-size:min(11.8cqw,10.8svh)}}
+@media(max-width:767px){
+ .journey .header{margin-inline:6%;padding-top:24px;padding-bottom:20px;gap:16px}
+ .journey .wordmark{font-size:30px;letter-spacing:.035em}.journey .wordmark small{font-size:8px}
+ .journey .copy{width:88%;top:clamp(170px,27svh,230px);bottom:35px}
+ .journey .copy h1{font-size:clamp(32px,min(12.3cqw,9svh),66px);line-height:1.12;letter-spacing:-.015em;margin-bottom:23px}
+ .journey .copy .eyebrow{font-size:9px;letter-spacing:.15em;margin-bottom:22px}
+ .journey .copy .description{font-size:14px;letter-spacing:.005em;line-height:1.75;max-width:325px}
+ .journey .copy .actions{gap:10px;margin-top:26px}
+ .journey .animatedCta{min-height:52px;font-size:12px;padding:9px 9px 9px 17px;gap:14px}
+ .journey .ctaArrow{width:28px;height:28px}.journey .ctaArrow svg{inset:4px}
+ .readingShade{background:linear-gradient(0deg,#060e1cdd 0%,#060e1c77 35%,transparent 76%)}
+ .orbitalLines{opacity:.25}.journey .starfield{opacity:.65}
+ .journey .mapCopy h2{letter-spacing:-.015em}
+}
+@media(max-width:360px){.journey .copy .actions{gap:8px}.journey .animatedCta{font-size:11px;gap:10px;padding-left:13px}.journey .copy .description{font-size:13px}}
+@media(max-height:650px){.journey .copy{top:125px;bottom:22px}.journey .copy h1{font-size:min(11.5cqw,9svh);margin-bottom:16px}.journey .copy .eyebrow{margin-bottom:14px}.journey .copy .description{font-size:13px;line-height:1.6}.journey .copy .actions{margin-top:18px}}
+@media(prefers-reduced-motion:reduce){
+ .journey .animatedCta,.journey .animatedCta::before,.journey .ctaArrow,.journey .wordmark small{transition:none}
+ .journey .copy{position:relative;inset:auto;padding-top:100px;padding-bottom:70px}
+}
+@media(max-width:767px){
+ .journey .copy{isolation:isolate}
+ .journey .copy::before{content:'';position:absolute;inset:-25px -7vw -25px;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 20% 55%,#060e1ce0 0%,#060e1ca3 42%,transparent 76%)}
+ .journey .copy h1{font-size:clamp(32px,min(14.3cqw,9svh),66px)}
+}
+@media(max-width:360px){.journey .animatedCta{gap:6px;padding-left:11px;padding-right:7px}.journey .ctaArrow{width:24px;height:24px}.journey .ctaArrow svg{inset:2px}}
+@media(max-height:650px){.journey .copy h1{font-size:min(11.5cqw,9svh)}}
+
+/* Stable identity and upright, openly tracked display typography. */
+.journey .wordmark{font-family:var(--font-heading);font-size:clamp(29px,2.6vw,40px);letter-spacing:.035em;font-weight:650;padding-left:64px;gap:10px}
+.journey .wordmark small{letter-spacing:.39em;transition:color .5s ease;position:relative;padding-bottom:6px}
+.journey .wordmark small::after{content:'';position:absolute;bottom:0;left:0;width:100%;height:1px;background:#ddbd77;transform:scaleX(0);transform-origin:right;transition:transform .8s cubic-bezier(.22,1,.36,1)}
+.journey .wordmark:is(:hover,:focus-visible) small::after{transform:scaleX(1);transform-origin:left}
+.journey .wordmark .brandEmblem{position:absolute;left:0;top:50%;width:48px;height:48px;transform:translateY(-50%)}
+.brandOrbit{transform-origin:28px 28px;transition:transform 1s cubic-bezier(.22,1,.36,1)}
+.wordmark:is(:hover,:focus-visible) .brandEmblem{color:#e6c98e}
+.journey .desktopNav{gap:clamp(20px,2.2vw,34px)}
+.journey .desktopNav a{font-size:clamp(12px,1vw,15px);letter-spacing:.035em;font-weight:500}
+.journey .desktopNav a::before{display:none}
+.journey .desktopNav a::after{bottom:5px;opacity:.5;transition-duration:.85s}
+.journey .copy h1{font-family:'Archivo Variable',Arial,sans-serif;font-style:normal;font-weight:600;font-kerning:none;font-variant-ligatures:none;letter-spacing:.018em;line-height:1.12;font-size:clamp(42px,min(11.9cqw,11svh),136px)}
+.journey .headingLine{padding:.055em .02em;margin:-.055em -.02em}
+.journey .headingLine>span{font-style:normal}
+.journey .copy h1 .headingAccent{background:linear-gradient(105deg,#f7f9fc 0%,#d4e4f3 55%,#7daddb 100%);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.journey .mapCopy h2{font-family:var(--font-heading);font-kerning:none;letter-spacing:.008em;line-height:1.15}
+@media(max-width:1100px) and (min-width:992px){.journey .header{gap:22px}.journey .wordmark{font-size:29px;padding-left:51px}.journey .wordmark .brandEmblem{width:40px;height:40px}.journey .desktopNav{gap:16px}.journey .desktopNav a{font-size:12px}}
+@media(max-width:767px){
+ .journey .wordmark{font-size:27px;padding-left:49px}.journey .wordmark .brandEmblem{width:38px;height:38px}.journey .wordmark small{font-size:7px;letter-spacing:.4em}
+ .journey .copy h1{font-size:clamp(33px,min(14.2cqw,9svh),68px);letter-spacing:.02em;line-height:1.14}
+ .journey .mapCopy h2{letter-spacing:.008em}
+}
+@media(max-height:650px){.journey .copy h1{font-size:min(12.4cqw,9svh)}}
+@media(prefers-reduced-motion:reduce){.brandOrbit,.journey .wordmark small::after{transition:none}.wordmark:is(:hover,:focus-visible) .brandOrbit{transform:none}}
+
+.journey .wordmark .brandEmblem{transition:color .65s ease}
+.journey .mobileMenu summary{gap:12px;min-width:82px;justify-content:flex-end}
+.menuGlyph{display:flex;gap:5px;align-items:center;justify-content:center;width:20px;height:20px;transition:transform .45s cubic-bezier(.4,0,.1,1)}
+.menuGlyph i{display:block;width:4px;height:4px;border-radius:50%;background:#e0d0ac}
+.menuLabel{display:block;position:relative;overflow:hidden;height:1.4em;line-height:1.4;min-width:5ch;font-size:11px;letter-spacing:.07em}
+.menuLabel>span{display:block;transition:transform .45s cubic-bezier(.4,0,.1,1)}
+.mobileMenu[open] .menuGlyph{transform:rotate(90deg)}
+.mobileMenu[open] .menuLabel>span{transform:translateY(-100%)}
+.journey .mobileMenu nav{background:#091728f5;border-color:#a8c7ef30;border-radius:18px;backdrop-filter:blur(18px)}
+.journey .mobileMenu[open] nav>a,.journey .mobileMenu[open] nav>button{animation:menuItemEnter .7s cubic-bezier(.22,1,.36,1) both}
+.journey .mobileMenu[open] nav>:nth-child(2){animation-delay:45ms}.journey .mobileMenu[open] nav>:nth-child(3){animation-delay:90ms}.journey .mobileMenu[open] nav>:nth-child(4){animation-delay:135ms}.journey .mobileMenu[open] nav>:nth-child(5){animation-delay:180ms}
+@keyframes menuItemEnter{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.menuGlyph,.menuLabel>span{transition:none}.journey .mobileMenu[open] nav>a,.journey .mobileMenu[open] nav>button{animation:none}}
+.journey .wordmark small{top:auto;left:auto}
+
+/* Editorial emphasis drawn into the final heading, inspired by the reference study. */
+.journey .wordmark{display:flex;flex-direction:column;align-items:flex-start;padding:0;font-size:clamp(29px,2.65vw,41px);gap:8px;line-height:1}
+.journey .wordmark small{position:static;padding:0;margin:0 0 0 2px;font-size:8px;line-height:1;letter-spacing:.42em}
+.journey .wordmark small::after{display:none}
+.journey .desktopNav a::after{display:none}
+.journey .headingLine:last-child{overflow:visible;position:relative;margin-bottom:.07em}
+.journey .headingAccent{position:relative;width:fit-content}
+.journey .headingMark{position:absolute;left:0;bottom:-.17em;width:100%;height:.25em;overflow:visible;pointer-events:none}
+.headingMark path{fill:none;stroke:#ddbd77;stroke-width:1.8;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100}
+.journey[data-presented="true"] .headingMark path{animation:drawHeading 1.1s .7s cubic-bezier(.65,0,.35,1) both}
+.journey[data-presented="true"] .headingLine>span{animation-name:editorialLine;animation-duration:.85s}
+.journey[data-presented="true"] .headingLine:nth-child(2)>span{animation-delay:.075s}.journey[data-presented="true"] .headingLine:nth-child(3)>span{animation-delay:.15s}
+@keyframes drawHeading{to{stroke-dashoffset:0}}
+@keyframes editorialLine{from{transform:translateY(112%);opacity:0}to{transform:translateY(0);opacity:1}}
+@media(max-width:767px){.journey .wordmark{font-size:29px;padding:0}.journey .wordmark small{font-size:7px}.journey .headingMark{bottom:-.15em}}
+@media(prefers-reduced-motion:reduce){.journey[data-presented="true"] .headingMark path{animation:none;stroke-dashoffset:0}}
+
+/* Scroll choreography uses the same playhead as the globe: reversible, without extra lag. */
+@media(prefers-reduced-motion:no-preference){
+ .journey .headingLine{--line-index:0;transform:translate3d(0,calc(var(--departure)*(-22px - var(--line-index)*12px)),0);opacity:clamp(0,calc(1 - var(--departure)*1.35 + var(--line-index)*.08),1)}
+ .journey .headingLine:nth-child(2){--line-index:1}
+ .journey .headingLine:nth-child(3){--line-index:2}
+ .journey .copy .description{transform:translate3d(0,calc(var(--departure)*-14px),0)}
+ .journey .copy .actions{transform:translate3d(0,calc(var(--departure)*-8px),0)}
+ .approachIntro>*{--reveal-order:0;--item-reveal:clamp(0,calc(var(--map-copy)*1.65 - var(--reveal-order)*.13),1);opacity:var(--item-reveal);transform:translate3d(0,calc((1 - var(--item-reveal))*24px),0)}
+ .approachIntro>:nth-child(2){--reveal-order:1}
+ .approachIntro>:nth-child(3){--reveal-order:2}
+ .approachIntro>:nth-child(4){--reveal-order:3}
+ .approachIntro>:nth-child(5){--reveal-order:4}
+ .journey .animatedCta .ctaArrow svg{transition-duration:.4s;transition-timing-function:cubic-bezier(.4,0,.1,1)}
+}
+
+/* A stable wordmark with a small route gesture, rather than a scaling logo. */
+.journey .wordmark{position:relative;isolation:isolate}
+.journey .wordmark>small{display:block;height:1.4em;line-height:1.4;overflow:hidden}
+.journey .wordmark>small>span{display:block;transition:transform .6s cubic-bezier(.22,1,.36,1);transform:translateY(0)}
+.journey .wordmark>small>span:nth-child(2){color:#fff2d6}
+.journey .wordmark:is(:hover,:focus-visible)>small>span{transform:translateY(-100%)}
+.brandRoute{position:absolute;left:0;right:0;bottom:-7px;height:1px;background:linear-gradient(90deg,#c79743,#f7dfa6);transform:scaleX(0);transform-origin:right;transition:transform .65s cubic-bezier(.22,1,.36,1);pointer-events:none}
+.journey .wordmark:is(:hover,:focus-visible) .brandRoute{transform:scaleX(1);transform-origin:left}
+@media(prefers-reduced-motion:reduce){.journey .wordmark>small>span,.brandRoute{transition:none}}

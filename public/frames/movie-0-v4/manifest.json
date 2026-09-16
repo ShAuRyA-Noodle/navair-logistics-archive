@@ -1,0 +1,43 @@
+{
+  "version": "movie-0-v4",
+  "count": 750,
+  "fps": 24,
+  "duration": 31.25,
+  "chapters": [
+    {
+      "time": 0,
+      "label": "01 / DEPARTURE",
+      "title": "Distance deserves direction."
+    },
+    {
+      "time": 14.25,
+      "label": "02 / IN TRANSIT",
+      "title": "Every handoff matters."
+    },
+    {
+      "time": 23.25,
+      "label": "03 / AIR TO SEA",
+      "title": "A clear way forward."
+    },
+    {
+      "time": 27.25,
+      "label": "04 / ARRIVAL",
+      "title": "Ready for what comes next."
+    }
+  ],
+  "poster": "/video/navair-film-poster.jpg",
+  "variants": {
+    "mobile": {
+      "path": "/frames/movie-0-v4/mobile",
+      "width": 960,
+      "height": 540,
+      "bytes": 46859626
+    },
+    "desktop": {
+      "path": "/frames/movie-0-v4/desktop",
+      "width": 1920,
+      "height": 1080,
+      "bytes": 112669804
+    }
+  }
+}

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Header } from '@/components/header';
 import '@fontsource-variable/montserrat';
+import '@fontsource-variable/archivo';
 import '@fontsource-variable/inter';
 import '@fontsource/open-sauce-sans/400.css';
 import '@fontsource/open-sauce-sans/500.css';

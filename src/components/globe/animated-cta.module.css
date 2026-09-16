@@ -1,0 +1,15 @@
+.magneticInner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: inherit;
+  width: 100%;
+  pointer-events: none;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .magneticInner {
+    will-change: auto;
+  }
+}

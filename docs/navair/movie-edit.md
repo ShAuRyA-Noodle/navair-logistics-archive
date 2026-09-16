@@ -8,7 +8,7 @@ Revision 2 restores ALL of Scene_02-A. The earlier edit incorrectly skipped the 
 - Retain the final uncovered crate and parachutes beside it; append a 0.75-second settled end handle.
 - Exclude Scene_02-B entirely.
 
-Expected duration: 30.0833 seconds at 24 fps. The source aircraft design changes between the clips; this edit preserves the requested narrative rather than cutting the cloud-flight sequence to disguise that change.
+Current duration after landing refinement: 31.25 seconds at 24 fps. The source aircraft design changes between the clips; this edit preserves the requested narrative rather than cutting the cloud-flight sequence to disguise that change.
 
 ## Delivery
 
@@ -16,3 +16,11 @@ Silent H.264, fast-start, no B-frames. Desktop 1920×1080 CRF19 with max 3-frame
 
 Timing and chapters are in `public/video/navair-film.json`.
 Rebuild: `python3 scripts/build-navair-film.py --source-dir /path/to/Movie_0`.
+
+## Landing refinement (revision 3)
+
+The source hard cut at Scene_02-A frame 313 is softened with a 0.375s dissolve. Only the landing close-up is slowed to 1/1.75 of its original speed. Motion-compensated intermediate frames are generated within that shot (never across the camera cut) before returning to 24fps. The earlier flight/release/descent chronology remains intact. This is an editorial softening, not a reconstructed continuous camera move. The player requests revision-3 assets; duration is read from the generated metadata.
+
+## Branding correction (revision 4)
+
+Removed motion-compensated frame interpolation from the slowed landing close-up. The 0.375-second dissolve and 1.75× landing duration remain, but retiming now repeats original source frames instead of synthesizing lettering and box geometry. Original motion blur during the first touchdown frames remains; settled branding is taken directly from the source. The player requests revision-4 assets.

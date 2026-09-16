@@ -2,13 +2,23 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styles from './scene-one.module.css';
+import dynamic from 'next/dynamic';
+import {filmReadiness} from './scene/film-readiness';
+const CanvasFilm = dynamic(() => import('./scene/CanvasFilm'), {ssr: false, loading: () => <section id="services" className={styles.scene} aria-label="Preparing canvas film" />});
 
 type Chapter = { time: number; label: string; title: string };
 type FilmMetadata = { duration: number; fps: number; chapters: Chapter[] };
 type Mode = 'scroll' | 'play';
-const FALLBACK: FilmMetadata = { duration: 30.083333, fps: 24, chapters: [{ time: 0, label: 'NAVAIR FILM', title: 'From runway to the world' }] };
+const FALLBACK: FilmMetadata = { duration: 31.25, fps: 24, chapters: [{ time: 0, label: 'NAVAIR FILM', title: 'From runway to the world' }] };
 
 export function SceneOne() {
+  const [player, setPlayer] = useState<'video'|'canvas'|null>(null);
+  useEffect(() => { setPlayer(new URLSearchParams(location.search).get('player') === 'canvas' ? 'canvas' : 'video'); }, []);
+  if (!player) return <section id="services" className={styles.scene} aria-label="Preparing logistics film" />;
+  return player === 'canvas' ? <CanvasFilm /> : <VideoFilm />;
+}
+
+function VideoFilm() {
   const sectionRef = useRef<HTMLElement>(null), videoRef = useRef<HTMLVideoElement>(null);
   const targetTime = useRef(0), scrollProgress = useRef(0), metadata = useRef(FALLBACK);
   const modeRef = useRef<Mode>('scroll'), objectUrl = useRef<string | null>(null), loadRef = useRef<(() => void) | null>(null);
@@ -39,21 +49,21 @@ export function SceneOne() {
     };
     const loadFilm = () => {
       if (disposed || request || objectUrl.current || film.src) return;
-      request = new AbortController(); setStatus('loading');
-      const source = matchMedia('(max-width: 760px)').matches ? '/video/navair-film-mobile.mp4?v=movie-0-v2' : '/video/navair-film-desktop.mp4?v=movie-0-v2';
+      request = new AbortController(); setStatus('loading'); filmReadiness.set('loading');
+      const source = matchMedia('(max-width: 760px)').matches ? '/video/navair-film-mobile.mp4?v=movie-0-v4' : '/video/navair-film-desktop.mp4?v=movie-0-v4';
       void Promise.all([
-        fetch('/video/navair-film.json?v=movie-0-v2', { signal: request.signal }).then(r => r.ok ? r.json() as Promise<FilmMetadata> : FALLBACK).catch(() => FALLBACK),
+        fetch('/video/navair-film.json?v=movie-0-v4', { signal: request.signal }).then(r => r.ok ? r.json() as Promise<FilmMetadata> : FALLBACK).catch(() => FALLBACK),
         fetch(source, { signal: request.signal }).then(r => { if (!r.ok) throw new Error(String(r.status)); return r.blob(); }),
       ]).then(([details, blob]) => {
         if (disposed) return;
-        metadata.current = { duration: details.duration || 30.083333, fps: details.fps || 24, chapters: details.chapters?.length ? details.chapters : FALLBACK.chapters };
+        metadata.current = { duration: details.duration || 31.25, fps: details.fps || 24, chapters: details.chapters?.length ? details.chapters : FALLBACK.chapters };
         targetTime.current = scrollProgress.current * metadata.current.duration;
         updateChapter(targetTime.current);
         objectUrl.current = URL.createObjectURL(blob); film.src = objectUrl.current; film.load();
-      }).catch(() => { if (!disposed) setStatus('error'); request = undefined; });
+      }).catch(() => { if (!disposed) { setStatus('error'); filmReadiness.set('error'); } request = undefined; });
     };
     loadRef.current = loadFilm;
-    const onReady = () => { setStatus('ready'); modeRef.current === 'play' ? void film.play().catch(() => { modeRef.current = 'scroll'; setMode('scroll'); applyTarget(); }) : applyTarget(); };
+    const onReady = () => { setStatus('ready'); filmReadiness.set('ready'); modeRef.current === 'play' ? void film.play().catch(() => { modeRef.current = 'scroll'; setMode('scroll'); applyTarget(); }) : applyTarget(); };
     const onTime = () => { updateChapter(film.currentTime); if (modeRef.current === 'play') { const d = film.duration || metadata.current.duration; setProgress(film.currentTime / d); } };
     // Hold the arrival frame until the viewer explicitly resumes scrolling.
     const onEnded = () => { setEnded(true); setProgress(1); updateChapter(metadata.current.duration); };
@@ -61,11 +71,12 @@ export function SceneOne() {
       if (!film.src) return;
       film.pause(); film.removeAttribute('src');
       if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
-      objectUrl.current = null; request = undefined; setStatus('error');
+      objectUrl.current = null; request = undefined; setStatus('error'); filmReadiness.set('error');
     };
     film.addEventListener('loadeddata', onReady); film.addEventListener('seeked', applyTarget); film.addEventListener('timeupdate', onTime); film.addEventListener('ended', onEnded); film.addEventListener('error', onError);
-    const observer = new IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) { if (!reduced.matches) loadFilm(); observer.disconnect(); } }, { rootMargin: '100% 0px' });
-    observer.observe(root);
+    // Start downloading at page entry, while the user is exploring the globe.
+    // Reduced-motion visitors keep explicit control through Play film.
+    if (!reduced.matches) loadFilm();
     void Promise.all([import('gsap'), import('gsap/ScrollTrigger')]).then(([{ gsap }, { ScrollTrigger }]) => {
       if (disposed) return; gsap.registerPlugin(ScrollTrigger);
       const trigger = ScrollTrigger.create({ trigger: root, start: 'top top', end: 'bottom bottom',
@@ -75,7 +86,7 @@ export function SceneOne() {
       killTrigger = () => trigger.kill();
     }).catch(() => setStatus('error'));
     return () => {
-      disposed = true; observer.disconnect(); killTrigger?.(); request?.abort(); loadRef.current = null; film.pause();
+      disposed = true; killTrigger?.(); request?.abort(); loadRef.current = null; film.pause();
       film.removeEventListener('loadeddata', onReady); film.removeEventListener('seeked', applyTarget); film.removeEventListener('timeupdate', onTime); film.removeEventListener('ended', onEnded); film.removeEventListener('error', onError);
       film.removeAttribute('src'); film.load(); if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); objectUrl.current = null;
     };

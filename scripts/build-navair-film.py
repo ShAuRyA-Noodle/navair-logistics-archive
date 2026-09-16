@@ -13,6 +13,9 @@ OUTPUT = ROOT / 'public/video'
 FPS = 24
 RELEASE_IN = 0  # Preserve all of Scene 02-A, including its flight above the clouds.
 TRANSITION = 20 / FPS
+LANDING_CUT = 313 / FPS
+LANDING_BLEND = 9 / FPS
+LANDING_STRETCH = 1.75
 
 
 def probe(path):
@@ -49,7 +52,12 @@ def main():
         graph = (
             f'[0:v]fps={FPS},scale={width}:{height}:flags=lanczos,setsar=1,format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[a];'
             f'[1:v]trim=start={RELEASE_IN:.8f},fps={FPS},scale={width}:{height}:flags=lanczos,setsar=1,format=yuv420p,'
-            'eq=saturation=0.94:gamma=1.025,settb=AVTB,setpts=PTS-STARTPTS[b];'
+            'eq=saturation=0.94:gamma=1.025,settb=AVTB,setpts=PTS-STARTPTS,split=2[flight][arrival];'
+            f'[flight]trim=end={LANDING_CUT:.8f},setpts=PTS-STARTPTS[flightEnd];'
+            f'[arrival]trim=start={LANDING_CUT:.8f},setpts=PTS-STARTPTS,'
+            f'setpts={LANDING_STRETCH}*PTS,fps={FPS},settb=AVTB[softArrival];'
+            f'[flightEnd][softArrival]xfade=transition=fade:duration={LANDING_BLEND:.8f}:'
+            f'offset={LANDING_CUT - LANDING_BLEND:.8f}[b];'
             f'[a][b]xfade=transition=fade:duration={TRANSITION:.8f}:offset={offset:.8f}[cut];'
             f'[2:v]scale={width}:{height},format=rgba,'
             f'fade=t=in:st={offset:.8f}:d={TRANSITION / 2:.8f}:alpha=1,'
@@ -65,7 +73,7 @@ def main():
 
     actual = probe(OUTPUT / 'navair-film-desktop.mp4')
     metadata = {
-        'version': 'movie-0-v2', 'fps': FPS,
+        'version': 'movie-0-v4', 'fps': FPS,
         'duration': int(actual['nb_frames']) / FPS,
         'transition': {'start': offset, 'end': first_duration, 'type': 'source-cloud-occlusion'},
         'chapters': [
@@ -76,7 +84,7 @@ def main():
         ],
         'sources': {'desktop': '/video/navair-film-desktop.mp4', 'mobile': '/video/navair-film-mobile.mp4'},
         'poster': '/video/navair-film-poster.jpg',
-        'edit': {'scene01': first.name, 'scene02': second.name.strip(), 'scene02In': RELEASE_IN, 'scene02BUsed': False}
+        'edit': {'scene01': first.name, 'scene02': second.name.strip(), 'scene02In': RELEASE_IN, 'landingCut': LANDING_CUT, 'landingBlend': LANDING_BLEND, 'landingStretch': LANDING_STRETCH, 'scene02BUsed': False}
     }
     (OUTPUT / 'navair-film.json').write_text(json.dumps(metadata, indent=2) + '\n')
     print(json.dumps(metadata), flush=True)

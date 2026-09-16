@@ -12,3 +12,12 @@
 body{font-family:var(--font-body)}
 h1{font-family:var(--font-heading)}
 h2,h3,nav,button{font-family:var(--font-ui)}
+
+/* Shared typography: readable spacing across public pages and forms. */
+h1{letter-spacing:-.025em;line-height:1.12}
+h2,h3{letter-spacing:-.012em}
+button,.button-link{letter-spacing:.01em}
+
+/* Upright display face and open tracking after the hero typography review. */
+:root{--font-heading:'Archivo Variable',Arial,sans-serif}
+h1{font-style:normal;font-kerning:none;letter-spacing:.012em}

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LAND_COORDINATES, COAST_COORDINATES } from './globe-land';
 import { flatLandOpacity, flatLocation, transitionAt } from './globe-transition';
 import { placeMapLabel, type LabelBox } from './map-label-layout';
@@ -12,6 +13,7 @@ export type GlobeOptions = {
   onReady?: () => void;
   onError?: () => void;
   reducedMotion?: boolean;
+  paused?: boolean;
 };
 
 export type GlobeController = {
@@ -41,7 +43,7 @@ const surfaceVertex = `
 /** An original, locally rendered globe. Routes are illustrative, not service claims. */
 export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): GlobeController {
   let destroyed = false;
-  let paused = false;
+  let paused = Boolean(options.paused);
   let visible = true;
   let contextLost = false;
   let frame = 0;
@@ -237,10 +239,14 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
     const projected = new THREE.Vector3();
     const normal = new THREE.Vector3();
     const toCamera = new THREE.Vector3();
-    function updateLabels() {
+    let lastLabelYaw = NaN, lastLabelPitch = NaN, lastLabelScroll = NaN, lastLabelFocus = NaN;
+    const setLabelOpacity = (element: HTMLElement, value: number) => {
+      const next = value.toFixed(3);
+      if (Number(element.style.opacity) !== Number(next)) element.style.opacity = next;
+    };
+    function updateLabels(bounds: DOMRect) {
       globe.updateMatrixWorld();
       const occupied: { x: number; y: number }[] = [];
-      const bounds = host.getBoundingClientRect();
       const displayScale = bounds.width / viewportWidth;
       const mobileMap = isMobile && morph.value > 0.95;
       const screenBoxes: LabelBox[] = [];
@@ -255,7 +261,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
         if (mobileMap) {
           const box = screenBoxes.length < 8 ? placeMapLabel(bounds.left + (x - 8) * displayScale, bounds.top + (y + 8) * displayScale, label.labelWidth, window.innerWidth, screenBoxes) : null;
           label.element.style.transformOrigin = 'top left';
-          label.element.style.opacity = box ? String((1 - focus.value) * THREE.MathUtils.smoothstep(morph.value, 0.95, 1)) : '0';
+          setLabelOpacity(label.element, box ? (1 - focus.value) * THREE.MathUtils.smoothstep(morph.value, 0.95, 1) : 0);
           if (box) {
             label.element.style.transform = `translate3d(${(box.x - bounds.left) / displayScale}px,${(box.y - bounds.top) / displayScale}px,0) scale(${1 / displayScale})`;
             screenBoxes.push(box);
@@ -263,8 +269,8 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
           continue;
         }
         const show = occupied.length < (isMobile ? 4 : 8) && facing > 0.2 && bounds.left + x * displayScale > 4 && bounds.left + (x + label.labelWidth) * displayScale < window.innerWidth - 4 && x > 0 && x < viewportWidth - 80 && y > 0 && y < viewportHeight - 20 && !occupied.some((point) => Math.abs(point.x - x) < 125 && Math.abs(point.y - y) < 28);
-        label.element.style.opacity = show ? String(THREE.MathUtils.smoothstep(facing, 0.2, 0.42) * (1 - Math.sin(morph.value * Math.PI)) * (1 - focus.value)) : '0';
-        label.element.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
+        setLabelOpacity(label.element, show ? THREE.MathUtils.smoothstep(facing, 0.2, 0.42) * (1 - Math.sin(morph.value * Math.PI)) * (1 - focus.value) : 0);
+        if (show || Number(label.element.style.opacity) > 0) label.element.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
         if (show) {
           occupied.push({ x, y });
         }
@@ -322,6 +328,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
         }
       `,
     });
+    const routeGeometries: THREE.BufferGeometry[] = [];
     for (const [routeIndex, [from, to]] of links.entries()) {
       const start = countryPositions[from];
       const end = countryPositions[to];
@@ -350,18 +357,26 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
         );
       }
       geometry.setAttribute('flatPosition', new THREE.Float32BufferAttribute(flatRoute, 3));
-      const route = new THREE.Mesh(geometry, routeMaterial);
-      route.frustumCulled = false;
-      globe.add(route);
+      routeGeometries.push(geometry);
     }
+    // Route phase is already a vertex attribute, so all paths can share one draw.
+    const mergedRoutes = mergeGeometries(routeGeometries);
+    if (!mergedRoutes) throw new Error('Unable to batch globe routes');
+    routeGeometries.forEach(geometry => geometry.dispose());
+    const routes = new THREE.Mesh(mergedRoutes, routeMaterial);
+    routes.frustumCulled = false;
+    globe.add(routes);
     const nodeGeometry = new THREE.SphereGeometry(0.008, 12, 8);
     const nodeMaterial = new THREE.MeshBasicMaterial({ color: 0xffc400, transparent: true });
-    const nodes = labelPlaces.map(([, latitude, longitude]) => {
-      const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
-      node.position.copy(location(latitude, longitude, 1.011));
-      scene.add(node);
-      return { node, sphere: location(latitude, longitude, 1.011), flat: new THREE.Vector3(...flatLocation(latitude, longitude)) };
-    });
+    const nodes = labelPlaces.map(([, latitude, longitude]) => ({
+      sphere: location(latitude, longitude, 1.011), flat: new THREE.Vector3(...flatLocation(latitude, longitude)),
+    }));
+    const markers = new THREE.InstancedMesh(nodeGeometry, nodeMaterial, nodes.length);
+    markers.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    markers.frustumCulled = false;
+    scene.add(markers);
+    const markerPosition = new THREE.Vector3();
+    const markerMatrix = new THREE.Matrix4();
     // All marker halos share one draw call and are occluded by the globe surface.
     const glowGeometry = new THREE.BufferGeometry();
     glowGeometry.setAttribute('position', new THREE.Float32BufferAttribute(
@@ -432,6 +447,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
         if (country) { selectedLabels[i].country = country; selectedLabels[i].element.textContent = country.name; }
       });
       if (reducedMotion) focus.value = focusTarget;
+      lastLabelScroll = NaN;
       resume();
     }
     function draw() {
@@ -447,24 +463,37 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
         surface.depthWrite = morph.value < 0.01;
         atmosphereMaterial.uniforms.uOpacity.value = 1 - THREE.MathUtils.smoothstep(morph.value, 0, 0.75);
         globe.updateMatrixWorld();
-        for (const { node, sphere, flat } of nodes) node.position.copy(sphere).applyMatrix4(globe.matrixWorld).lerp(flat, morph.value);
+        for (let index = 0; index < nodes.length; index++) {
+          const {sphere, flat} = nodes[index];
+          markerPosition.copy(sphere).applyMatrix4(globe.matrixWorld).lerp(flat, morph.value);
+          markerMatrix.makeTranslation(markerPosition.x, markerPosition.y, markerPosition.z);
+          markers.setMatrixAt(index, markerMatrix);
+        }
+        markers.instanceMatrix.needsUpdate = true;
         renderer.render(scene, camera);
-        updateLabels();
-        for (const label of selectedLabels) {
-          const point = countryPosition(label.country).applyMatrix4(globe.matrixWorld).lerp(new THREE.Vector3(...flatLocation(label.country.latitude, label.country.longitude)), morph.value).project(camera);
-          const x = (point.x * 0.5 + 0.5) * viewportWidth;
-          const y = (-point.y * 0.5 + 0.5) * viewportHeight;
-          if (isMobile && morph.value > 0.95) {
-            const bounds = host.getBoundingClientRect();
-            const scale = bounds.width / viewportWidth;
-            const labelWidth = label.element.offsetWidth;
-            const screenX = Math.max(8 + labelWidth / 2, Math.min(window.innerWidth - 8 - labelWidth / 2, bounds.left + x * scale));
-            label.element.style.transformOrigin = 'top left';
-            label.element.style.transform = `translate3d(${(screenX - bounds.left) / scale}px,${y - 17}px,0) scale(${1 / scale}) translate(-50%,-100%)`;
-          } else {
-            label.element.style.transform = `translate3d(${x}px,${y - 17}px,0) translate(-50%,-100%)`;
+        const labelsChanged = lastLabelYaw !== globe.rotation.y || lastLabelPitch !== globe.rotation.x || lastLabelScroll !== scroll || Math.abs(lastLabelFocus - focus.value) > 0.001 || Number.isNaN(lastLabelFocus);
+        if (labelsChanged) {
+          lastLabelYaw = globe.rotation.y; lastLabelPitch = globe.rotation.x; lastLabelScroll = scroll; lastLabelFocus = focus.value;
+          // Read layout once, before any label writes. Static maps only animate their GPU routes.
+          const bounds = host.getBoundingClientRect();
+          const selectedWidths = selectedLabels.map(label => label.active ? label.element.offsetWidth : 0);
+          updateLabels(bounds);
+          for (const [labelIndex, label] of selectedLabels.entries()) {
+            if (!label.active) { setLabelOpacity(label.element, 0); continue; }
+            const point = countryPosition(label.country).applyMatrix4(globe.matrixWorld).lerp(new THREE.Vector3(...flatLocation(label.country.latitude, label.country.longitude)), morph.value).project(camera);
+            const x = (point.x * 0.5 + 0.5) * viewportWidth;
+            const y = (-point.y * 0.5 + 0.5) * viewportHeight;
+            if (isMobile && morph.value > 0.95) {
+              const scale = bounds.width / viewportWidth;
+              const labelWidth = selectedWidths[labelIndex];
+              const screenX = Math.max(8 + labelWidth / 2, Math.min(window.innerWidth - 8 - labelWidth / 2, bounds.left + x * scale));
+              label.element.style.transformOrigin = 'top left';
+              label.element.style.transform = `translate3d(${(screenX - bounds.left) / scale}px,${y - 17}px,0) scale(${1 / scale}) translate(-50%,-100%)`;
+            } else {
+              label.element.style.transform = `translate3d(${x}px,${y - 17}px,0) translate(-50%,-100%)`;
+            }
+            setLabelOpacity(label.element, morph.value > 0.9 ? focus.value : 0);
           }
-          label.element.style.opacity = label.active && morph.value > 0.9 ? String(focus.value) : '0';
         }
         if (!ready) {
           ready = true;
@@ -505,6 +534,10 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       const smoothing = reducedMotion ? 1 : 1 - Math.exp(-(activePointer === null ? 20 : 36) * delta);
       dragYaw += (targetYaw - dragYaw) * smoothing;
       dragPitch += (targetPitch - dragPitch) * smoothing;
+      // End sub-pixel settling instead of rewriting unchanged labels indefinitely.
+      if (Math.abs(targetYaw - dragYaw) < 0.0001) dragYaw = targetYaw;
+      if (Math.abs(targetPitch - dragPitch) < 0.0001) dragPitch = targetPitch;
+      if (Math.abs(focusTarget - focus.value) < 0.001) focus.value = focusTarget;
       applyRotation();
       draw();
       const settling = Math.abs(focusTarget - focus.value) > 0.001 || Math.abs(targetYaw - dragYaw) + Math.abs(targetPitch - dragPitch) > 0.0001;
@@ -548,6 +581,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       const width = host.clientWidth;
       const height = host.clientHeight;
       if (!width || !height) return;
+      lastLabelScroll = NaN;
       viewportWidth = width;
       viewportHeight = height;
       camera.aspect = width / height;
@@ -655,6 +689,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
             list.forEach((material) => materials.add(material));
           }
         });
+        markers.dispose();
         geometries.forEach((geometry) => geometry.dispose());
         materials.forEach((material) => material.dispose());
         selectedMaterial.dispose();
