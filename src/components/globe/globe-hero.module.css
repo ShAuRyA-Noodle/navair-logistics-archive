@@ -367,7 +367,7 @@
 
 /* Editorial emphasis drawn into the final heading, inspired by the reference study. */
 .journey .wordmark{display:flex;flex-direction:column;align-items:flex-start;padding:0;font-size:clamp(29px,2.65vw,41px);gap:8px;line-height:1}
-.journey .wordmark small{position:static;padding:0;margin:0 0 0 2px;font-size:8px;line-height:1;letter-spacing:.42em}
+.journey .wordmark small{position:static;padding:0;margin:0 0 0 2px;font-size:11px;line-height:1;letter-spacing:.32em}
 .journey .wordmark small::after{display:none}
 .journey .desktopNav a::after{display:none}
 .journey .headingLine:last-child{overflow:visible;position:relative;margin-bottom:.07em}
@@ -379,7 +379,7 @@
 .journey[data-presented="true"] .headingLine:nth-child(2)>span{animation-delay:.075s}.journey[data-presented="true"] .headingLine:nth-child(3)>span{animation-delay:.15s}
 @keyframes drawHeading{to{stroke-dashoffset:0}}
 @keyframes editorialLine{from{transform:translateY(112%);opacity:0}to{transform:translateY(0);opacity:1}}
-@media(max-width:767px){.journey .wordmark{font-size:29px;padding:0}.journey .wordmark small{font-size:7px}.journey .headingMark{bottom:-.15em}}
+@media(max-width:767px){.journey .wordmark{font-size:29px;padding:0}.journey .wordmark small{font-size:10px}.journey .headingMark{bottom:-.15em}}
 @media(prefers-reduced-motion:reduce){.journey[data-presented="true"] .headingMark path{animation:none;stroke-dashoffset:0}}
 
 /* Scroll choreography uses the same playhead as the globe: reversible, without extra lag. */
