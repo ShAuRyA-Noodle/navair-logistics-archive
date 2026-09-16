@@ -24,3 +24,9 @@ The source hard cut at Scene_02-A frame 313 is softened with a 0.375s dissolve. 
 ## Branding correction (revision 4)
 
 Removed motion-compensated frame interpolation from the slowed landing close-up. The 0.375-second dissolve and 1.75× landing duration remain, but retiming now repeats original source frames instead of synthesizing lettering and box geometry. Original motion blur during the first touchdown frames remains; settled branding is taken directly from the source. The player requests revision-4 assets.
+
+### Mobile playback repair (movie-0-v5)
+
+A full-length browser playback check reproduced an Apple VideoToolbox decode failure at approximately 15.3 seconds in the mobile MP4. FFmpeg independently reported invalid NAL unit sizes and corrupt packets. The desktop MP4 passed a full strict decode.
+
+Rebuilt the mobile asset from the clean desktop master at 960×540, 24 fps, H.264 High level 3.1, limited-range yuv420p, CRF 17, two-frame GOP and no B frames. It retains all 750 frames and the exact 31.25-second duration. Full strict decoding of the replacement reports no errors. The player asset query and metadata version are bumped to movie-0-v5 to bypass cached corrupt media. The movie build script now performs a strict full decode after each encode and fails if any decoder error is found.

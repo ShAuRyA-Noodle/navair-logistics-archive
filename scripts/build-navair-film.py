@@ -69,11 +69,12 @@ def main():
             '-preset', 'medium', '-crf', crf, '-pix_fmt', 'yuv420p', '-r', FPS,
             '-g', keyint, '-keyint_min', keyint, '-sc_threshold', 0, '-bf', 0,
             '-movflags', '+faststart', OUTPUT / f'navair-film-{name}.mp4')
+        run('-xerror', '-i', OUTPUT / f'navair-film-{name}.mp4', '-f', 'null', '-')
         print(f'{name}: {(OUTPUT / f"navair-film-{name}.mp4").stat().st_size / 1048576:.1f} MiB', flush=True)
 
     actual = probe(OUTPUT / 'navair-film-desktop.mp4')
     metadata = {
-        'version': 'movie-0-v4', 'fps': FPS,
+        'version': 'movie-0-v5', 'fps': FPS,
         'duration': int(actual['nb_frames']) / FPS,
         'transition': {'start': offset, 'end': first_duration, 'type': 'source-cloud-occlusion'},
         'chapters': [

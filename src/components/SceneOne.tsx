@@ -45,7 +45,7 @@ function VideoFilm() {
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
     let disposed = false, request: AbortController | undefined, killTrigger: (() => void) | undefined;
     let nativeFallback = false;
-    const source = matchMedia('(max-width: 760px)').matches ? '/video/navair-film-mobile.mp4?v=movie-0-v4' : '/video/navair-film-desktop.mp4?v=movie-0-v4';
+    const source = matchMedia('(max-width: 760px)').matches ? '/video/navair-film-mobile.mp4?v=movie-0-v5' : '/video/navair-film-desktop.mp4?v=movie-0-v5';
     const useNativeSource = () => {
       if (disposed) return;
       nativeFallback = true;
@@ -65,7 +65,7 @@ function VideoFilm() {
       request = new AbortController(); setStatus('loading'); filmReadiness.set('loading');
       nativeFallback = false; setPlayNotice('');
       void Promise.all([
-        fetch('/video/navair-film.json?v=movie-0-v4', { signal: request.signal }).then(r => r.ok ? r.json() as Promise<FilmMetadata> : FALLBACK).catch(() => FALLBACK),
+        fetch('/video/navair-film.json?v=movie-0-v5', { signal: request.signal }).then(r => r.ok ? r.json() as Promise<FilmMetadata> : FALLBACK).catch(() => FALLBACK),
         fetch(source, { signal: request.signal }).then(r => { if (!r.ok) throw new Error(String(r.status)); return r.blob(); }),
       ]).then(([details, blob]) => {
         if (disposed) return;
