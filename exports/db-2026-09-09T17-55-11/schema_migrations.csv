@@ -1,0 +1,11 @@
+name,applied_at
+001_core.sql,2026-09-08T07:08:34.473Z
+002_enquiry.sql,2026-09-08T07:11:17.341Z
+003_mail.sql,2026-09-08T07:14:22.058Z
+004_integrity.sql,2026-09-08T07:19:44.196Z
+005_mail_hardening.sql,2026-09-08T07:24:53.510Z
+006_data_import.sql,2026-09-08T07:29:59.169Z
+007_route_catalog.sql,2026-09-08T07:37:33.151Z
+008_public_route_conditions.sql,2026-09-08T09:39:39.742Z
+009_exporter_shipment_details.sql,2026-09-09T12:42:27.319Z
+010_route_availability_review.sql,2026-09-09T14:00:02.144Z

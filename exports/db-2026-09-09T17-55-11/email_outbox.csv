@@ -1,0 +1,243 @@
+id,enquiry_id,kind,recipient,subject,body,reply_to,idempotency_key,status,attempts,available_at,locked_at,first_attempt_at,provider_id,last_error,created_at,updated_at,lease_id
+ef041e55-7e2b-4e12-aa81-d8431b2e8276,81cbeadb-2421-48e3-93ab-6df260a0996c,staff,operations@navair.example,New export enquiry NAV-81CBEADB24,"New enquiry from Local Walkthrough
+Email: walkthrough-b44527aa@demo.example
+Route: Delhi to Dubai
+Mode: air
+Phone: Not provided
+Requirements: 100 kg of textile samples for the local test.",walkthrough-b44527aa@demo.example,enquiry/81cbeadb-2421-48e3-93ab-6df260a0996c/staff-v1,preview,1,2026-09-08T07:40:59.724Z,,2026-09-08T07:41:00.302Z,,,2026-09-08T07:40:59.724Z,2026-09-08T07:41:00.306Z,
+09b2eddc-3bca-48f5-89d9-c50e59a8020d,81cbeadb-2421-48e3-93ab-6df260a0996c,acknowledgment,walkthrough-b44527aa@demo.example,We received your enquiry NAV-81CBEADB24,"Hello Local Walkthrough,
+
+Thank you for contacting Navair Logistics. We received your enquiry for Delhi to Dubai. Our team will review your requirements and get in touch.
+
+Your reference: NAV-81CBEADB24
+This acknowledges your enquiry; it does not confirm a booking or price.
+
+Navair Logistics",operations@navair.example,enquiry/81cbeadb-2421-48e3-93ab-6df260a0996c/ack-v1,preview,1,2026-09-08T07:40:59.724Z,,2026-09-08T07:41:00.311Z,,,2026-09-08T07:40:59.724Z,2026-09-08T07:41:00.312Z,
+b7724520-66a7-4711-add7-ab82e81ff728,81cbeadb-2421-48e3-93ab-6df260a0996c,accepted,walkthrough-b44527aa@demo.example,Your enquiry has been accepted NAV-81CBEADB24,"Hello Local Walkthrough,
+
+Navair has accepted your enquiry. Sign in to the Navair website with the email you used for your enquiry to view your shipment journey, agreed selling price and delivery updates.
+
+Reference: NAV-81CBEADB24
+
+Navair Logistics",operations@navair.example,enquiry/81cbeadb-2421-48e3-93ab-6df260a0996c/accepted-v1,preview,1,2026-09-08T07:40:59.836Z,,2026-09-08T07:41:00.316Z,,,2026-09-08T07:40:59.836Z,2026-09-08T07:41:00.317Z,
+00334ad0-05aa-4183-97b7-489d46c39e0f,31ea6be2-d5d5-4ce1-bcf1-50aeb0380fd2,staff,operations@navair.example,New export enquiry NAV-31EA6BE2D5,"New enquiry from Exporter Review
+Email: exporter-review-20260909@example.test
+Route: Mumbai, India to Rotterdam, Netherlands
+Mode: sea
+Phone: +919876543210
+Requirements: Twelve cartons of cotton shirts for retail sale",exporter-review-20260909@example.test,enquiry/31ea6be2-d5d5-4ce1-bcf1-50aeb0380fd2/staff-v1,preview,1,2026-09-09T12:41:15.118Z,,2026-09-09T12:41:17.985Z,,,2026-09-09T12:41:15.118Z,2026-09-09T12:41:18.027Z,
+2db87183-d3c7-4308-9d93-2577e4db0898,31ea6be2-d5d5-4ce1-bcf1-50aeb0380fd2,acknowledgment,exporter-review-20260909@example.test,We received your enquiry NAV-31EA6BE2D5,"Hello Exporter Review,
+
+Thank you for contacting Navair Logistics. We received your enquiry for Mumbai, India to Rotterdam, Netherlands. Our team will review your requirements and get in touch.
+
+Your reference: NAV-31EA6BE2D5
+This acknowledges your enquiry; it does not confirm a booking or price.
+
+Navair Logistics",operations@navair.example,enquiry/31ea6be2-d5d5-4ce1-bcf1-50aeb0380fd2/ack-v1,preview,1,2026-09-09T12:41:15.118Z,,2026-09-09T12:41:23.040Z,,,2026-09-09T12:41:15.118Z,2026-09-09T12:41:23.078Z,
+12d86064-30fe-4042-bb6f-9c82d7de116c,,staff,recipient-d06787b3@example.test,Test mail,Body,reply@example.test,mail/12d86064-30fe-4042-bb6f-9c82d7de116c,sent,0,2026-09-08T07:15:41.850Z,,,provider-85d0d95e-fd3d-4c85-82ec-b7e059264a93,,2026-09-08T07:15:41.850Z,2026-09-08T07:15:41.850Z,
+b0e14026-8dd9-4315-b710-fbfd8e957bce,,staff,recipient-3c40618b@example.test,Test mail,Body,reply@example.test,mail/b0e14026-8dd9-4315-b710-fbfd8e957bce,preview,0,2026-09-08T07:16:00.626Z,,,,,2026-09-08T07:16:00.626Z,2026-09-08T07:16:00.626Z,
+754194bc-2c17-4366-a727-de503fc4e332,,staff,recipient-3c40618b@example.test,Test mail,Body,reply@example.test,mail/754194bc-2c17-4366-a727-de503fc4e332,bounced,0,2026-09-08T07:16:00.670Z,,,provider-688a2c98-97cf-4aae-beb5-3e468e84b1a3,,2026-09-08T07:16:00.670Z,2026-09-08T07:16:00.679Z,
+040fa2d1-2d2e-41a7-ae55-6a085fff638c,,staff,recipient-d06787b3@example.test,Test mail,Body,reply@example.test,mail/040fa2d1-2d2e-41a7-ae55-6a085fff638c,preview,0,2026-09-08T07:15:41.812Z,,,,,2026-09-08T07:15:41.812Z,2026-09-08T07:15:41.812Z,
+d0915602-ea3a-4d6d-ac7d-1fb87c8da7fc,,staff,recipient-d06787b3@example.test,Test mail,Body,reply@example.test,mail/d0915602-ea3a-4d6d-ac7d-1fb87c8da7fc,preview,0,2026-09-08T07:15:41.826Z,,,,,2026-09-08T07:15:41.826Z,2026-09-08T07:15:41.826Z,
+6c0c38ae-fb1f-4937-b418-f9397c60a0b5,,staff,recipient-d06787b3@example.test,Test mail,Body,reply@example.test,mail/6c0c38ae-fb1f-4937-b418-f9397c60a0b5,preview,0,2026-09-08T07:15:41.843Z,,,,Recovered stale worker lease,2026-09-08T07:15:41.842Z,2026-09-08T07:15:41.843Z,
+15d5faa5-e589-4ac6-81bc-d43997474309,,staff,recipient-3c40618b@example.test,Test mail,Body,reply@example.test,mail/15d5faa5-e589-4ac6-81bc-d43997474309,preview,0,2026-09-08T07:16:00.645Z,,,,,2026-09-08T07:16:00.645Z,2026-09-08T07:16:00.645Z,
+83cbf649-0089-433b-9f52-d1cd780a3a36,,staff,recipient-3c40618b@example.test,Test mail,Body,reply@example.test,mail/83cbf649-0089-433b-9f52-d1cd780a3a36,preview,0,2026-09-08T07:16:00.659Z,,,,Recovered stale worker lease,2026-09-08T07:16:00.658Z,2026-09-08T07:16:00.659Z,
+0f1751d8-3238-44ec-8027-d92ced146405,,staff,recipient-683e5045@example.test,Test mail,Body,reply@example.test,mail/0f1751d8-3238-44ec-8027-d92ced146405,preview,0,2026-09-08T07:16:19.239Z,,,,,2026-09-08T07:16:19.239Z,2026-09-08T07:16:19.239Z,
+2de0ef2e-a752-46a3-b3df-4134de2044a0,,staff,recipient-683e5045@example.test,Test mail,Body,reply@example.test,mail/2de0ef2e-a752-46a3-b3df-4134de2044a0,preview,0,2026-09-08T07:16:19.253Z,,,,,2026-09-08T07:16:19.253Z,2026-09-08T07:16:19.253Z,
+25287ea8-4f93-4561-b5b9-54a528945975,,staff,recipient-683e5045@example.test,Test mail,Body,reply@example.test,mail/25287ea8-4f93-4561-b5b9-54a528945975,preview,1,2026-09-08T07:16:19.272Z,,2026-09-08T07:16:19.275Z,,,2026-09-08T07:16:19.271Z,2026-09-08T07:16:19.278Z,
+5da5f949-60e2-4df6-ba24-0ef33d6a10ef,,staff,recipient-683e5045@example.test,Test mail,Body,reply@example.test,mail/5da5f949-60e2-4df6-ba24-0ef33d6a10ef,bounced,0,2026-09-08T07:16:19.280Z,,,provider-0bac105e-4969-4383-9d68-ff6864dbdc8d,,2026-09-08T07:16:19.280Z,2026-09-08T07:16:19.289Z,
+49c0ba85-6739-4857-8322-cd22b62eabaf,,staff,recipient-352fa4eb@example.test,Test mail,Body,reply@example.test,mail/49c0ba85-6739-4857-8322-cd22b62eabaf,preview,0,2026-09-08T07:16:34.095Z,,,,,2026-09-08T07:16:34.095Z,2026-09-08T07:16:34.095Z,
+3e4a5be7-dc01-42c8-91d0-daed7c040fc9,,staff,recipient-352fa4eb@example.test,Test mail,Body,reply@example.test,mail/3e4a5be7-dc01-42c8-91d0-daed7c040fc9,preview,1,2026-09-08T07:16:34.106Z,,2026-09-08T07:16:34.107Z,,,2026-09-08T07:16:34.106Z,2026-09-08T07:16:34.110Z,
+2dc8e28b-030b-44cb-90cb-09ae1484c9ba,,staff,recipient-352fa4eb@example.test,Test mail,Body,reply@example.test,mail/2dc8e28b-030b-44cb-90cb-09ae1484c9ba,preview,1,2026-09-08T07:16:34.114Z,,2026-09-08T07:16:34.114Z,,,2026-09-08T07:16:34.112Z,2026-09-08T07:16:34.115Z,
+37860a67-9f5d-4516-a4ff-ab57649b3d58,,staff,recipient-352fa4eb@example.test,Test mail,Body,reply@example.test,mail/37860a67-9f5d-4516-a4ff-ab57649b3d58,bounced,0,2026-09-08T07:16:34.121Z,,,provider-811fbdaf-c617-4bb4-b830-2ae0043ffe2d,,2026-09-08T07:16:34.121Z,2026-09-08T07:16:34.130Z,
+83bdeece-8a70-415f-8854-2c825bb2731c,44b9e0ee-97f1-4171-a137-0c8502493246,staff,operations@navair.example,New export enquiry NAV-44B9E0EE97,"New enquiry from Shaurya Punj
+Email: shauryapunj404@gmail.com
+Route: Delhi to Dubai
+Mode: sea
+Phone: +918368743601
+Requirements: Commercial cargo shipment to Dubai. Looking for reliable and timely delivery, with standard handling requirements. Please share the available shipping options and estimated cost.",shauryapunj404@gmail.com,enquiry/44b9e0ee-97f1-4171-a137-0c8502493246/staff-v1,preview,1,2026-09-08T09:00:57.761Z,,2026-09-08T09:00:58.190Z,,,2026-09-08T09:00:57.761Z,2026-09-08T09:00:58.199Z,
+c79a2a9a-2651-4a82-a27d-f903789498b4,44b9e0ee-97f1-4171-a137-0c8502493246,acknowledgment,shauryapunj404@gmail.com,We received your enquiry NAV-44B9E0EE97,"Hello Shaurya Punj,
+
+Thank you for contacting Navair Logistics. We received your enquiry for Delhi to Dubai. Our team will review your requirements and get in touch.
+
+Your reference: NAV-44B9E0EE97
+This acknowledges your enquiry; it does not confirm a booking or price.
+
+Navair Logistics",operations@navair.example,enquiry/44b9e0ee-97f1-4171-a137-0c8502493246/ack-v1,preview,1,2026-09-08T09:00:57.761Z,,2026-09-08T09:01:03.201Z,,,2026-09-08T09:00:57.761Z,2026-09-08T09:01:03.206Z,
+519540b3-2835-4ae8-876a-5a6aa3489dac,,staff,recipient-5475bd48@example.test,Test mail,Body,reply@example.test,mail/519540b3-2835-4ae8-876a-5a6aa3489dac,preview,0,2026-09-08T07:16:39.737Z,,,,,2026-09-08T07:16:39.737Z,2026-09-08T07:16:39.737Z,
+ac3670a6-26d9-4d30-a153-a685156079c2,402b3621-ca30-468b-8998-09aa520e23e5,staff,operations@navair.example,New export enquiry NAV-402B3621CA,"New enquiry from Exporter Review
+Email: exporter-review-migrated-20260909@example.test
+Route: Mumbai, India to Rotterdam, Netherlands
+Mode: sea
+Phone: +919876543210
+Requirements: Twelve cartons of cotton shirts for retail sale
+Shipment details:
+Cargo type: textiles
+Goods: Twelve cartons of cotton shirts for retail sale
+Package type: boxes
+Package count: 12
+Handling: normal
+Total weight: Unknown
+Dimensions per package: Unknown
+Sea container: not_sure
+Cargo readiness: Flexible
+Notes: Fresh migrated database integration trace.",exporter-review-migrated-20260909@example.test,enquiry/402b3621-ca30-468b-8998-09aa520e23e5/staff-v2,preview,1,2026-09-09T12:42:54.373Z,,2026-09-09T12:42:59.173Z,,,2026-09-09T12:42:54.373Z,2026-09-09T12:42:59.193Z,
+7abacdc2-b4f3-44fc-974e-0cb38669e791,,staff,recipient-5475bd48@example.test,Test mail,Body,reply@example.test,mail/7abacdc2-b4f3-44fc-974e-0cb38669e791,preview,1,2026-09-08T07:16:39.749Z,,2026-09-08T07:16:39.749Z,,,2026-09-08T07:16:39.749Z,2026-09-08T07:16:39.752Z,
+b68826de-5375-4c2f-b946-1a671b6f25c9,,staff,recipient-5475bd48@example.test,Test mail,Body,reply@example.test,mail/b68826de-5375-4c2f-b946-1a671b6f25c9,preview,1,2026-09-08T07:16:39.754Z,,2026-09-08T07:16:39.754Z,,,2026-09-08T07:16:39.753Z,2026-09-08T07:16:39.755Z,
+67977aa0-620f-4e7a-b5d8-f25bf19cf0f8,,staff,recipient-5475bd48@example.test,Test mail,Body,reply@example.test,mail/67977aa0-620f-4e7a-b5d8-f25bf19cf0f8,bounced,0,2026-09-08T07:16:39.762Z,,,provider-6122a0a1-4170-4dfc-9740-3a9e9ad4554f,,2026-09-08T07:16:39.762Z,2026-09-08T07:16:39.771Z,
+64f439d6-1f82-4150-a39d-9baf24650323,,staff,recipient-f50fbadc@example.test,Test mail,Body,reply@example.test,mail/64f439d6-1f82-4150-a39d-9baf24650323,preview,0,2026-09-08T07:17:37.268Z,,,,,2026-09-08T07:17:37.268Z,2026-09-08T07:17:37.268Z,
+33670a59-a987-4c2c-8353-6482fe0f2a54,,staff,recipient-f50fbadc@example.test,Test mail,Body,reply@example.test,mail/33670a59-a987-4c2c-8353-6482fe0f2a54,preview,1,2026-09-08T07:17:37.282Z,,2026-09-08T07:17:37.282Z,,,2026-09-08T07:17:37.282Z,2026-09-08T07:17:37.289Z,
+78e2bf57-4231-4cf3-b494-83bde3634b4b,,staff,recipient-f50fbadc@example.test,Test mail,Body,reply@example.test,mail/78e2bf57-4231-4cf3-b494-83bde3634b4b,preview,1,2026-09-08T07:17:37.292Z,,2026-09-08T07:17:37.292Z,,,2026-09-08T07:17:37.291Z,2026-09-08T07:17:37.292Z,
+d6d7d2a2-b5a6-4070-8cb6-6adf8633b53c,,staff,recipient-f50fbadc@example.test,Test mail,Body,reply@example.test,mail/d6d7d2a2-b5a6-4070-8cb6-6adf8633b53c,failed,1,2026-09-08T07:17:37.298Z,,2026-09-08T07:17:37.298Z,,RESEND_API_KEY is required when MAIL_MODE=resend.,2026-09-08T07:17:37.298Z,2026-09-08T07:17:37.298Z,
+7e342198-4ead-4226-a4be-181252dd8f88,,staff,recipient-f50fbadc@example.test,Test mail,Body,reply@example.test,mail/7e342198-4ead-4226-a4be-181252dd8f88,bounced,0,2026-09-08T07:17:37.300Z,,,provider-b95eabb7-927e-44b4-8fe4-3ef52556a0c7,,2026-09-08T07:17:37.300Z,2026-09-08T07:17:37.309Z,
+36ff9de4-b5fc-4997-9dd9-034efe2f11df,,staff,recipient-73e85a46@example.test,Test mail,Body,reply@example.test,mail/36ff9de4-b5fc-4997-9dd9-034efe2f11df,preview,0,2026-09-08T07:17:46.111Z,,,,,2026-09-08T07:17:46.111Z,2026-09-08T07:17:46.111Z,
+34b7482c-ec8f-4129-a990-0abbd261824a,,staff,recipient-73e85a46@example.test,Test mail,Body,reply@example.test,mail/34b7482c-ec8f-4129-a990-0abbd261824a,preview,1,2026-09-08T07:17:46.120Z,,2026-09-08T07:17:46.120Z,,,2026-09-08T07:17:46.120Z,2026-09-08T07:17:46.123Z,
+509b2dd2-a425-4aee-bd89-9db39e6e434b,,staff,recipient-73e85a46@example.test,Test mail,Body,reply@example.test,mail/509b2dd2-a425-4aee-bd89-9db39e6e434b,preview,1,2026-09-08T07:17:46.125Z,,2026-09-08T07:17:46.125Z,,,2026-09-08T07:17:46.124Z,2026-09-08T07:17:46.126Z,
+2f9ae2e5-e042-43c1-848e-07122b1a9934,,staff,recipient-73e85a46@example.test,Test mail,Body,reply@example.test,mail/2f9ae2e5-e042-43c1-848e-07122b1a9934,failed,1,2026-09-08T07:17:46.131Z,,2026-09-08T07:17:46.131Z,,RESEND_API_KEY is required when MAIL_MODE=resend.,2026-09-08T07:17:46.131Z,2026-09-08T07:17:46.132Z,
+35129caa-75bc-4da6-93b6-19450fc4c0a4,,staff,recipient-73e85a46@example.test,Test mail,Body,reply@example.test,mail/35129caa-75bc-4da6-93b6-19450fc4c0a4,bounced,0,2026-09-08T07:17:46.133Z,,,provider-25833afc-a3d9-472f-a75c-bb2c2e5b469b,,2026-09-08T07:17:46.133Z,2026-09-08T07:17:46.142Z,
+6c68c648-72ea-4e0a-ae0e-df63e316b691,402b3621-ca30-468b-8998-09aa520e23e5,acknowledgment,exporter-review-migrated-20260909@example.test,We received your enquiry NAV-402B3621CA,"Hello Exporter Review,
+
+Thank you for contacting Navair Logistics. We received your enquiry for Mumbai, India to Rotterdam, Netherlands. Our team will review your requirements and get in touch.
+Shipment details:
+Cargo type: textiles
+Goods: Twelve cartons of cotton shirts for retail sale
+Package type: boxes
+Package count: 12
+Handling: normal
+Total weight: Unknown
+Dimensions per package: Unknown
+Sea container: not_sure
+Cargo readiness: Flexible
+Notes: Fresh migrated database integration trace.
+
+Your reference: NAV-402B3621CA
+This acknowledges your enquiry; it does not confirm a booking or price.
+
+Navair Logistics",operations@navair.example,enquiry/402b3621-ca30-468b-8998-09aa520e23e5/ack-v2,preview,1,2026-09-09T12:42:54.373Z,,2026-09-09T12:43:04.203Z,,,2026-09-09T12:42:54.373Z,2026-09-09T12:43:04.643Z,
+043efb72-ecf4-454f-9c27-a79274528be9,,staff,recipient-55c90076@example.test,Test mail,Body,reply@example.test,mail/043efb72-ecf4-454f-9c27-a79274528be9,preview,0,2026-09-08T07:18:43.766Z,,,,,2026-09-08T07:18:43.766Z,2026-09-08T07:18:43.766Z,
+ee5b29df-fdeb-42a1-9b0c-c716c39a8a73,,staff,recipient-55c90076@example.test,Test mail,Body,reply@example.test,mail/ee5b29df-fdeb-42a1-9b0c-c716c39a8a73,preview,1,2026-09-08T07:18:43.779Z,,2026-09-08T07:18:43.779Z,,,2026-09-08T07:18:43.779Z,2026-09-08T07:18:43.788Z,
+03f13298-7e1f-4983-a122-f2ac90fa381f,,staff,recipient-55c90076@example.test,Test mail,Body,reply@example.test,mail/03f13298-7e1f-4983-a122-f2ac90fa381f,preview,1,2026-09-08T07:18:43.790Z,,2026-09-08T07:18:43.790Z,,,2026-09-08T07:18:43.789Z,2026-09-08T07:18:43.791Z,
+ad085b62-ae8c-4f93-90a4-21715f2a3a9d,,staff,recipient-55c90076@example.test,Test mail,Body,reply@example.test,mail/ad085b62-ae8c-4f93-90a4-21715f2a3a9d,failed,1,2026-09-08T07:18:43.796Z,,2026-09-08T07:18:43.796Z,,RESEND_API_KEY is required when MAIL_MODE=resend.,2026-09-08T07:18:43.796Z,2026-09-08T07:18:43.797Z,
+6a95519c-376f-49b0-85f6-eb762e34d069,,staff,recipient-55c90076@example.test,Test mail,Body,reply@example.test,mail/6a95519c-376f-49b0-85f6-eb762e34d069,preview,1,2026-09-08T07:19:13.800Z,,2026-09-08T07:18:43.799Z,,temporary provider outage,2026-09-08T07:18:43.799Z,2026-09-08T07:18:43.800Z,
+781cab17-8045-4b04-9618-a1eb8a7c5219,,staff,recipient-55c90076@example.test,Test mail,Body,reply@example.test,mail/781cab17-8045-4b04-9618-a1eb8a7c5219,bounced,0,2026-09-08T07:18:43.802Z,,,provider-fc9609f0-8762-4e04-9b62-a1cca4486ad2,,2026-09-08T07:18:43.802Z,2026-09-08T07:18:43.810Z,
+52c03055-1e8b-4ee6-b497-98ea98c93e38,aa93f788-cee0-4229-a906-d4ca300d1867,staff,shauryapunj404@gmail.com,New export enquiry NAV-AA93F788CE,"New enquiry from Shaurya Punjabi
+Email: shauryapunj404@gmail.com
+Route: Mumbai, India to Dubai, UAE
+Mode: air
+Phone: Not provided
+Requirements: Authorized delivery test for Navair Logistics. Please do not treat this as a booking request.
+Shipment details:
+Cargo type: samples
+Goods: Test shipment enquiry
+Package type: boxes
+Package count: 1
+Total weight: Unknown
+Dimensions per package: Unknown
+Cargo readiness: Flexible
+Notes: Email delivery verification only.",shauryapunj404@gmail.com,enquiry/aa93f788-cee0-4229-a906-d4ca300d1867/staff-v2,sent,1,2026-09-09T13:12:26.715Z,,2026-09-09T13:18:20.591Z,b437a88e-92d1-41dd-a884-a977b2329752,,2026-09-09T13:12:26.715Z,2026-09-09T13:18:21.985Z,
+fa3ab208-9b9a-40c4-ac2d-e7c37e5adb9d,aa93f788-cee0-4229-a906-d4ca300d1867,acknowledgment,shauryapunj404@gmail.com,We received your enquiry NAV-AA93F788CE,"Hello Shaurya Punjabi,
+
+Thank you for contacting Navair Logistics. We received your enquiry for Mumbai, India to Dubai, UAE. Our team will review your requirements and get in touch.
+Shipment details:
+Cargo type: samples
+Goods: Test shipment enquiry
+Package type: boxes
+Package count: 1
+Total weight: Unknown
+Dimensions per package: Unknown
+Cargo readiness: Flexible
+Notes: Email delivery verification only.
+
+Your reference: NAV-AA93F788CE
+This acknowledges your enquiry; it does not confirm a booking or price.
+
+Navair Logistics",shauryapunj404@gmail.com,enquiry/aa93f788-cee0-4229-a906-d4ca300d1867/ack-v2,sent,1,2026-09-09T13:12:26.715Z,,2026-09-09T13:18:35.896Z,42ef032d-01a4-4913-b0f3-1d4a101a1389,,2026-09-09T13:12:26.715Z,2026-09-09T13:18:36.385Z,
+f734ab0e-9124-4c22-b423-4b5bf5bba2a1,952a0207-5732-41c7-8a10-7753d1158034,staff,shauryapunj404@gmail.com,Route availability review required: NAV-952A020757,"Route availability review required. Service is not confirmed; assess availability and possible alternatives.
+
+New enquiry from Shaurya Punj
+Email: workwithshaurya10@gmail.com
+Route: Mumbai to Goa
+Mode: road
+Phone: +918368743601
+Requirements: 12 boxes of lithium-ion batteries
+Shipment details:
+Cargo type: electronics
+Goods: 12 boxes of lithium-ion batteries
+Package type: boxes
+Package count: 12
+Handling: normal
+Total weight: Unknown
+Dimensions per package: Unknown
+Cargo readiness: 2026-10-10",workwithshaurya10@gmail.com,enquiry/952a0207-5732-41c7-8a10-7753d1158034/staff-v3,sent,1,2026-09-09T17:34:56.762Z,,2026-09-09T17:35:00.394Z,c284c90f-04f1-489a-8854-cea8243c0206,,2026-09-09T17:34:56.762Z,2026-09-09T17:35:01.560Z,
+78236a56-85e4-43be-a12e-f748e29da679,952a0207-5732-41c7-8a10-7753d1158034,acknowledgment,workwithshaurya10@gmail.com,We received your enquiry NAV-952A020757,"Hello Shaurya Punj,
+
+Thank you for contacting Navair Logistics. We received your enquiry for Mumbai to Goa. Our team will review availability and possible alternatives, then get in touch.
+Shipment details:
+Cargo type: electronics
+Goods: 12 boxes of lithium-ion batteries
+Package type: boxes
+Package count: 12
+Handling: normal
+Total weight: Unknown
+Dimensions per package: Unknown
+Cargo readiness: 2026-10-10
+
+Your reference: NAV-952A020757
+This acknowledges your enquiry; it does not confirm a booking, quote, or availability.
+
+Navair Logistics",shauryapunj404@gmail.com,enquiry/952a0207-5732-41c7-8a10-7753d1158034/ack-v3,failed,1,2026-09-09T17:34:56.762Z,,2026-09-09T17:35:06.576Z,,Recipient outside active test allowlist.,2026-09-09T17:34:56.762Z,2026-09-09T17:35:06.585Z,
+8a6ac761-ecf1-4585-9185-20c031b660c2,022fe918-6a09-4248-bac9-02839061f84f,staff,shauryapunj404@gmail.com,Route availability review required: NAV-022FE9186A,"Route availability review required. Service is not confirmed; assess availability and possible alternatives.
+
+New enquiry from Shaurya Punj
+Email: workwithshaurya10@gmail.com
+Route: Mumbai to Delhi
+Mode: road
+Phone: +918368743601
+Requirements: 12 packets of Ready to cook noodles
+Shipment details:
+Cargo type: food_beverage
+Goods: 12 packets of Ready to cook noodles
+Package type: container
+Package count: 12
+Handling: normal
+Total weight: Unknown
+Dimensions per package: Unknown
+Cargo readiness: 2026-10-05",workwithshaurya10@gmail.com,enquiry/022fe918-6a09-4248-bac9-02839061f84f/staff-v3,sent,1,2026-09-09T17:52:17.960Z,,2026-09-09T17:52:20.994Z,2e0f4c8e-8053-469f-8260-61d8fb3b175c,,2026-09-09T17:52:17.960Z,2026-09-09T17:52:21.763Z,
+52676ab7-d312-40bc-bf21-07f9b28a696e,022fe918-6a09-4248-bac9-02839061f84f,acknowledgment,workwithshaurya10@gmail.com,We received your enquiry NAV-022FE9186A,"Hello Shaurya Punj,
+
+Thank you for contacting Navair Logistics. We received your enquiry for Mumbai to Delhi. Our team will review availability and possible alternatives, then get in touch.
+Shipment details:
+Cargo type: food_beverage
+Goods: 12 packets of Ready to cook noodles
+Package type: container
+Package count: 12
+Handling: normal
+Total weight: Unknown
+Dimensions per package: Unknown
+Cargo readiness: 2026-10-05
+
+Your reference: NAV-022FE9186A
+This acknowledges your enquiry; it does not confirm a booking, quote, or availability.
+
+Navair Logistics",shauryapunj404@gmail.com,enquiry/022fe918-6a09-4248-bac9-02839061f84f/ack-v3,sent,1,2026-09-09T17:52:17.960Z,,2026-09-09T17:52:26.790Z,6378d51f-bda8-4a1a-a986-ff8279f1f26b,,2026-09-09T17:52:17.960Z,2026-09-09T17:52:27.447Z,
+74193526-893c-46c2-a781-ffcb40230408,f1a1369b-77f1-457d-8765-1bed3da8e6ba,staff,operations@navair.example,New export enquiry NAV-F1A1369B77,"New enquiry from Local Walkthrough
+Email: walkthrough-1aab96ef@demo.example
+Route: Delhi to Dubai
+Mode: air
+Phone: Not provided
+Requirements: 100 kg of textile samples for the local test.",walkthrough-1aab96ef@demo.example,enquiry/f1a1369b-77f1-457d-8765-1bed3da8e6ba/staff-v1,preview,1,2026-09-08T07:27:33.707Z,,2026-09-08T07:27:36.779Z,,,2026-09-08T07:27:33.707Z,2026-09-08T07:27:36.783Z,
+53c292de-2e6a-480c-ab59-de6078fbcb34,f1a1369b-77f1-457d-8765-1bed3da8e6ba,acknowledgment,walkthrough-1aab96ef@demo.example,We received your enquiry NAV-F1A1369B77,"Hello Local Walkthrough,
+
+Thank you for contacting Navair Logistics. We received your enquiry for Delhi to Dubai. Our team will review your requirements and get in touch.
+
+Your reference: NAV-F1A1369B77
+This acknowledges your enquiry; it does not confirm a booking or price.
+
+Navair Logistics",operations@navair.example,enquiry/f1a1369b-77f1-457d-8765-1bed3da8e6ba/ack-v1,preview,1,2026-09-08T07:27:33.707Z,,2026-09-08T07:27:37.792Z,,,2026-09-08T07:27:33.707Z,2026-09-08T07:27:37.795Z,
+9d111e1c-bba2-4a17-b3da-37b51f6a3bb9,f1a1369b-77f1-457d-8765-1bed3da8e6ba,accepted,walkthrough-1aab96ef@demo.example,Your enquiry has been accepted NAV-F1A1369B77,"Hello Local Walkthrough,
+
+Navair has accepted your enquiry. Sign in to the Navair website with the email you used for your enquiry to view your shipment journey, agreed selling price and delivery updates.
+
+Reference: NAV-F1A1369B77
+
+Navair Logistics",operations@navair.example,enquiry/f1a1369b-77f1-457d-8765-1bed3da8e6ba/accepted-v1,preview,1,2026-09-08T07:27:35.172Z,,2026-09-08T07:27:37.800Z,,,2026-09-08T07:27:35.172Z,2026-09-08T07:27:37.801Z,

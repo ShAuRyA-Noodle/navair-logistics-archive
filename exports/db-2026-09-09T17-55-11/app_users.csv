@@ -1,0 +1,12 @@
+id,external_id,email,name,role,permissions,active,is_demo,created_at
+e667e496-92d7-48c0-a8ec-0bb9ed4e88fc,,exporter-review-20260909@example.test,Exporter Review,customer,[],true,true,2026-09-09T12:41:15.118Z
+4946114f-cfca-442b-9e52-d35686a29af0,,exporter-review-migrated-20260909@example.test,Exporter Review,customer,[],true,true,2026-09-09T12:42:54.373Z
+1277dcc9-d005-474d-bdd5-83a4f414336f,,workwithshaurya10@gmail.com,Shaurya Punj,customer,[],true,true,2026-09-09T17:34:56.762Z
+10000000-0000-4000-8000-000000000001,,owner@demo.example,Navair Owner,owner,[],true,true,2026-09-08T07:20:26.678Z
+10000000-0000-4000-8000-000000000002,,operations@demo.example,Aditi · Operations,staff,"[""cases.assigned"",""shipments.update"",""commitments.manage""]",true,true,2026-09-08T07:20:26.678Z
+10000000-0000-4000-8000-000000000003,,sales@demo.example,Arjun · Sales,staff,"[""cases.assigned"",""commitments.manage""]",true,true,2026-09-08T07:20:26.678Z
+10000000-0000-4000-8000-000000000004,,saurabh@demo.example,Saurabh Mehta,customer,[],true,true,2026-09-08T07:20:26.678Z
+10000000-0000-4000-8000-000000000005,,rishi@demo.example,Rishi Jain,customer,[],true,true,2026-09-08T07:20:26.678Z
+62ce9651-b772-4b0f-bd44-f9304712700b,,walkthrough-1aab96ef@demo.example,Local Walkthrough,customer,[],true,true,2026-09-08T07:27:33.707Z
+66d9176c-52a6-41ba-83d2-bb0ebf4f53f8,,walkthrough-b44527aa@demo.example,Local Walkthrough,customer,[],true,true,2026-09-08T07:40:59.724Z
+ae2071f8-1302-4ce1-abb9-5f0a18a79db3,,shauryapunj404@gmail.com,Shaurya Punj,customer,[],true,true,2026-09-08T09:00:57.761Z
