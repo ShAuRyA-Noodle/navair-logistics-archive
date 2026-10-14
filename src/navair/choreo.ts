@@ -17,6 +17,8 @@ import { articulate } from './machines/rig';
 import type { Ocean, Ship } from './machines/ship';
 import type { StsCrane } from './machines/stscrane';
 import { TRAIL_N } from './scene/oceanGL';
+import { hullMotion } from './scene/water/waves';
+import { waterGPU } from './scene/water/gpu';
 import { BOX, RIG } from './world';
 import { CHAPTERS, DURATION } from './story';
 
@@ -100,8 +102,13 @@ export function buildMaster(ctx: Ctx) {
   Object.assign(reach.pose, { x: -1650, z: 0, heading: 0, boom: 6, ext: 0, spread: 1, spreaderYaw: 0, twist: 0, dip: 0 });
 
   /* ------------------------------------------------------------ constraints */
-  let seaClock = 0;
-  let lastNow = performance.now();
+  let steady: V3 | null = null;
+  // Sea motion repaints the world canvas every frame, even with the scroll idle.
+  // On integrated / mobile GPUs, or once the frame governor has had to lower the
+  // world's resolution, the device can't afford that: the hull lies still (eased
+  // to rest), so an idle frame costs only the water pass.
+  const dpr0 = e.dpr;
+  let motionK = waterGPU.weak ? 0 : 1;
   e.constrain(() => {
     reach.apply();
     crane.apply();
@@ -122,14 +129,27 @@ export function buildMaster(ctx: Ctx) {
     // Departure: the ship swings away from the quay onto a curved course.
     const sp = shipPath(sea.dist);
     ship.root.p[0] = shipBase.x + sp.x;
+    ship.root.p[1] = 0;
     ship.root.p[2] = shipBase.z + sp.z;
-    ship.root.r.y = sp.yaw;
-    // The water's clock only runs while the ship is under way: a still sea costs
-    // nothing to paint, a moving one repaints its plane every frame.
-    const now = performance.now();
-    seaClock += Math.min(0.05, (now - lastNow) / 1000) * sea.speed;
-    lastNow = now;
-    void seaClock;
+    ship.root.r = { x: 0, y: sp.yaw, z: 0 };
+    // The camera follows the box's STEADY pose (before sea motion), so the hull
+    // visibly rides the swell instead of the whole world bobbing round it.
+    steady = carry.mode === 'ship' ? ship.slot().p : null;
+    // Seakeeping: heave / pitch / roll from the very wave function the water
+    // shader draws (scene/water/waves.ts), on the same clock (real seconds), so
+    // the hull and the water agree. Moored (speed 0) the ship lies still, which
+    // also keeps the berth frames free of repaints. Plus heel in the turn.
+    motionK = clamp(motionK + (waterGPU.weak || e.dpr < dpr0 - 0.01 ? -0.02 : 0.01), 0, 1);
+    if (sea.speed > 0.001 && ocean.root.visible && motionK > 0) {
+      const yr = (sp.yaw * Math.PI) / 180;
+      const m = hullMotion([ship.root.p[0] / 100, ship.root.p[2] / 100], [Math.cos(yr), -Math.sin(yr)], ship.LOA / 100, ship.BEAM / 100, performance.now() / 1000, QUAY_EDGE_Z / 100);
+      const k0 = clamp(sea.speed / 0.3, 0, 1);
+      const k = k0 * k0 * (3 - 2 * k0) * motionK * motionK * (3 - 2 * motionK);
+      const heel = 1.5 * sea.speed * sea.speed * yawRate(sea.dist);
+      ship.root.p[1] = m.heave * 100 * k;
+      ship.root.r.z = clamp(m.pitch * 0.9 + 0.15 * sea.speed, -2.5, 2.5) * k;
+      ship.root.r.x = clamp(-m.roll * 1.5 + heel, -4, 4) * k;
+    }
 
     // Hero box carrier.
     let pos: V3, yaw: number, lift = 0;
@@ -171,7 +191,7 @@ export function buildMaster(ctx: Ctx) {
     ground.slab.k = [1, slabK.v, 1];
     if (follow.w > 0) {
       // The camera follows the hero box itself, whoever carries it.
-      const tp = hero.p;
+      const tp = steady ?? hero.p;
       fx = lerp(shot.x, tp[0] + follow.ox, follow.w);
       fy = lerp(shot.y, tp[1] + follow.oy, follow.w);
       fz = lerp(shot.z, tp[2] + follow.oz, follow.w);
@@ -433,15 +453,21 @@ export function buildMaster(ctx: Ctx) {
 }
 
 /** Ship departure course: distance sailed → offset from the berth and yaw. */
+// The course bears away from the quay (toward −Z = positive yaw).
+function yawAt(s: number) {
+  const t = clamp((s - 3000) / 36000, 0, 1);
+  return 38 * t * t * (3 - 2 * t);
+}
+/** Turn rate along the course, normalised to 1 at its peak. */
+function yawRate(s: number) {
+  const t = clamp((s - 3000) / 36000, 0, 1);
+  return 4 * t * (1 - t);
+}
+
 function shipPath(d: number) {
   const steps = Math.max(1, Math.ceil(d / 600));
   const h = d / steps;
   let x = 0, z = 0, yaw = 0;
-  // The course bears away from the quay (toward −Z = positive yaw).
-  const yawAt = (s: number) => {
-    const t = clamp((s - 3000) / 36000, 0, 1);
-    return 38 * t * t * (3 - 2 * t);
-  };
   for (let i = 0; i < steps; i++) {
     const a = (yawAt(h * (i + 0.5)) * Math.PI) / 180;
     x += Math.cos(a) * h;
