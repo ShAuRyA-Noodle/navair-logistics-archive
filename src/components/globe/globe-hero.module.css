@@ -406,3 +406,17 @@
 .brandRoute{position:absolute;left:0;right:0;bottom:-7px;height:1px;background:linear-gradient(90deg,#c79743,#f7dfa6);transform:scaleX(0);transform-origin:right;transition:transform .65s cubic-bezier(.22,1,.36,1);pointer-events:none}
 .journey .wordmark:is(:hover,:focus-visible) .brandRoute{transform:scaleX(1);transform-origin:left}
 @media(prefers-reduced-motion:reduce){.journey .wordmark>small>span,.brandRoute{transition:none}}
+
+/* Compact editorial hierarchy in the expanded-map introduction. */
+.journey .approachIntro>.eyebrow{margin:0;font-family:var(--font-ui);line-height:1.4}
+.journey .approachIntro>h2{font-family:var(--font-ui);font-weight:550;font-kerning:normal;font-size:clamp(32px,3.25vw,50px);line-height:1.1;letter-spacing:-.025em;text-wrap:balance;margin:14px 0 16px}
+.journey .approachIntro>h2>span{display:block;margin-top:.12em}
+.journey .approachIntro>p:not(.eyebrow){font-family:var(--font-ui);font-size:15px;line-height:1.55;letter-spacing:0;margin:0;max-width:34ch}
+.journey .approachIntro>.animatedCta{margin-top:20px}
+.journey .approachIntro>small{margin-top:12px;line-height:1.4}
+@media(max-width:767px){
+ .journey .approachIntro>h2{font-size:clamp(26px,7.2vw,34px);line-height:1.1;margin:10px 0 12px}
+ .journey .approachIntro>p:not(.eyebrow){font-size:13px;line-height:1.5;max-width:38ch}
+ .journey .approachIntro>.animatedCta{margin-top:16px}
+ .journey .approachIntro>small{margin-top:10px;font-size:9px}
+}

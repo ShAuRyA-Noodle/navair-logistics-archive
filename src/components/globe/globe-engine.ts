@@ -141,7 +141,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
     const landMaterial = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
-      uniforms: { uPointSize: { value: 2.0 }, uMorph: morph, uFocus: focus },
+      uniforms: { uPointSize: { value: 2.0 }, uFlatPointSize: { value: 0 }, uMorph: morph, uFocus: focus },
       vertexShader: `
         attribute vec3 flatPosition;
         attribute float flatOpacity;
@@ -149,6 +149,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
         attribute float shade;
         attribute float coastline;
         uniform float uPointSize;
+        uniform float uFlatPointSize;
         varying float vShade;
         varying float vFacing;
         varying float vOpacity;
@@ -160,7 +161,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
           vShade = shade;
           vOpacity = mix(1.0, flatOpacity, uMorph);
           gl_Position = projectionMatrix * viewPosition;
-          gl_PointSize = uPointSize * (2.28 / -viewPosition.z) * mix(1.0, 0.88, coastline);
+          gl_PointSize = max(uPointSize * (2.28 / -viewPosition.z) * mix(1.0, 0.88, coastline), uFlatPointSize * smoothstep(0.75, 1.0, uMorph));
         }
       `,
       fragmentShader: `
@@ -595,6 +596,9 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 1.5);
       countryMaterial.uniforms.uSize.value = Math.max(3, width * 0.004) * dpr;
       glowMaterial.uniforms.uSize.value = Math.max(12, Math.min(width, height) * 0.027) * dpr;
+      // Compensate only flat-map dots for the phone canvas composition scale.
+      const flatScale = window.innerWidth * 0.96 / (width * 0.82);
+      landMaterial.uniforms.uFlatPointSize.value = mobile ? 0.8 * dpr / flatScale : 0;
       renderer.setPixelRatio(dpr);
       renderer.setSize(width, height, false);
       landMaterial.uniforms.uPointSize.value = Math.max(1.05, Math.min(width, height) * 0.0017) * dpr;

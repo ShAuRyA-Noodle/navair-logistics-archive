@@ -252,7 +252,7 @@ export function GlobeHero() {
     <div className={styles.mapCopy} ref={approach} inert={!reduced && !failed}>
       <motion.div aria-hidden={formOpen} inert={formOpen} className={styles.approachIntro} initial={false} animate={{ opacity: formOpen ? 0 : 1, y: formOpen ? -12 : 0 }} transition={{ duration: reduced ? 0 : 0.24 }} style={{ pointerEvents: formOpen ? 'none' : 'auto' }}>
       <p className={styles.eyebrow}>THE NAVAIR APPROACH</p>
-      <h2>THE WORLD IS <br />COMPLICATED.<br /><span>LET’S FIND <br />YOUR WAY.</span></h2>
+      <h2>The world is complicated.<span>Let’s find your way.</span></h2>
       <p>Every journey starts with the right questions. Share your origin, destination and cargo details. We’ll bring the essentials together.</p>
       <AnimatedCta onClick={openEnquiry}>Start a conversation</AnimatedCta>
       <small>Routes shown are illustrative.</small>
