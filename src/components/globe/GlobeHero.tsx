@@ -80,19 +80,16 @@ export function GlobeHero() {
         onReady: () => { if (!disposed) { setReady(true); setFailed(false); } },
         onError: () => { if (!disposed) setFailed(true); },
       });
-      return Promise.all([import('gsap'), import('gsap/ScrollTrigger'), import('lenis')]);
+      return Promise.all([import('gsap'), import('gsap/ScrollTrigger'), import('@/lib/smooth-scroll')]);
     }).then((modules) => {
       if (!modules || disposed || !root.current) return;
-      const [{ gsap }, { ScrollTrigger }, { default: Lenis }] = modules;
+      const [{ gsap }, { ScrollTrigger }, { acquireSmoothScroll }] = modules;
       gsap.registerPlugin(ScrollTrigger);
       const match = gsap.matchMedia();
       match.add('(prefers-reduced-motion: no-preference)', () => {
-        const lenis = new Lenis({ lerp: 0.085, smoothWheel: true, syncTouch: false, anchors: true });
-        smoothScroll.current = lenis;
-        lenis.on('scroll', ScrollTrigger.update);
-        const advanceScroll = (time: number) => lenis.raf(time * 1000);
-        gsap.ticker.add(advanceScroll);
-        document.documentElement.dataset.navairSmooth = 'true';
+        // Shared, ref-counted Lenis (src/lib/smooth-scroll.ts): the Navair sequence below uses the same instance.
+        const smooth = acquireSmoothScroll();
+        smoothScroll.current = smooth.lenis;
         const playhead = { progress: 0 };
         let width = 0, height = 0, globeWidth = 0, initialCentre = 0;
         const update = () => {
@@ -140,10 +137,8 @@ export function GlobeHero() {
         timeline.to(playhead, { progress: 1, duration: 1, ease: 'none' });
         return () => {
           observer.disconnect();
-          gsap.ticker.remove(advanceScroll);
-          lenis.destroy();
+          smooth.release();
           smoothScroll.current = null;
-          delete document.documentElement.dataset.navairSmooth;
           engine.current?.setScroll(0);
           stage.current?.style.setProperty('--departure', '0');
           stage.current?.style.setProperty('--map-copy', '1');

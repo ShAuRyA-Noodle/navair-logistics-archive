@@ -1,10 +1,21 @@
 /**
  * Client bootstrap: engine + world + scroll + HUD. Returns a disposer.
+ *
+ * Homepage integration (navair-logistics):
+ *  - scroll runs on the page-wide shared Lenis + gsap.ticker (src/lib/smooth-scroll.ts),
+ *    never a second Lenis;
+ *  - the root (.nx) fills the NavairSequence shell and IS the scroll track: the master
+ *    timeline maps 'top top' → 'bottom bottom' of it, while its sticky .view holds the stage;
+ *  - all per-frame work (engine, water, HUD, governor) only runs while the section is on
+ *    screen;
+ *  - an entry timeline swings the container doors open and reveals the opening copy as the
+ *    section arrives under the globe hero (replaces the standalone veil + timed intro);
+ *  - prefers-reduced-motion: native scroll, scrub without smoothing, no doors.
  */
 
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import Lenis from 'lenis';
+import { acquireSmoothScroll, requestRefresh, scrollToY } from '@/lib/smooth-scroll';
 import { Engine, Node3 } from './engine/engine';
 import { rr } from './engine/art';
 import { createGround } from './scene/ground';
@@ -25,6 +36,21 @@ export function boot(root: HTMLElement) {
   const qa = (s: string) => Array.from(root.querySelectorAll(s)) as HTMLElement[];
   const canvas = root.querySelector('canvas.stage--main') as HTMLCanvasElement;
   const mobile = window.matchMedia('(max-width: 860px)').matches;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduced) root.dataset.nxReduced = '';
+  const view = q('.view');
+
+  // Face art (container markings) resolves its families from these root custom
+  // properties; point them at the site's faces unless the page already defines them.
+  const rootStyle = document.documentElement.style;
+  const ownedFontVars: string[] = [];
+  const css = getComputedStyle(document.documentElement);
+  for (const [k, v] of [['--font-display', "'Archivo Variable', Arial"], ['--font-mono', "'IBM Plex Mono'"]] as const) {
+    if (!css.getPropertyValue(k).trim()) {
+      rootStyle.setProperty(k, v);
+      ownedFontVars.push(k);
+    }
+  }
 
   /* ---------------------------------------------------------------- world */
   const e = new Engine(canvas, { dpr: Math.min(window.devicePixelRatio || 1, 2) });
@@ -44,7 +70,6 @@ export function boot(root: HTMLElement) {
     QUAY_EDGE_Z,
     { L: ship.LOA, B: ship.BEAM },
   );
-
 
   const reach = createReachStacker();
   e.root.add(reach.root);
@@ -77,14 +102,19 @@ export function boot(root: HTMLElement) {
   e.mount();
 
   /* ---------------------------------------------------------------- sizing */
+  // Measured from the sticky view (100svh), not the window: mobile URL-bar show/hide
+  // changes innerHeight but not the stage, so it never forces a re-layout mid-scroll.
   const size = () => {
-    const W = window.innerWidth, H = window.innerHeight;
+    const W = view.clientWidth || window.innerWidth, H = view.clientHeight || window.innerHeight;
     // Reference: 1080 px tall. On portrait screens scale by width instead.
     const k = W / H < 1 ? W / 1080 : Math.min(H / 1080, W / 1500);
     e.resize(W, H, k);
     // Water is soft by nature: shade it at 70% of CSS resolution.
     water.resize(W, H, 0.7);
+    dirty = true;
   };
+  // Engine re-render needed even if the timeline hasn't moved (resize, DPR step, re-entry).
+  let dirty = true;
   size();
 
   /* ---------------------------------------------------------------- timeline */
@@ -92,32 +122,24 @@ export function boot(root: HTMLElement) {
   (window as unknown as { NAV_DEV: unknown }).NAV_DEV = { tl, e, state };
 
   /* ---------------------------------------------------------------- scroll */
-  const lenis = new Lenis({ lerp: 0.085, wheelMultiplier: 0.95, touchMultiplier: 1.5, smoothWheel: true });
-  (window as unknown as { __lenis: Lenis }).__lenis = lenis;
-  lenis.on('scroll', ScrollTrigger.update);
-  const raf = (t: number) => lenis.raf(t * 1000);
-  gsap.ticker.add(raf);
-  gsap.ticker.lagSmoothing(0);
+  const smooth = acquireSmoothScroll();
 
-  const track = q('.track');
   const st = ScrollTrigger.create({
-    trigger: track,
+    trigger: root,
     start: 'top top',
     end: 'bottom bottom',
-    scrub: 0.7,
+    scrub: reduced ? true : 0.7,
     animation: tl,
     invalidateOnRefresh: true,
   });
 
   /* ---------------------------------------------------------------- HUD */
-  const view = q('.view');
   const speedoEl = q('[data-el="speedo"]');
   const speedoV = q('[data-el="speedo-v"]');
   const hudIdx = q('[data-el="hud-idx"]');
   const hudLabel = q('[data-el="hud-label"]');
   const spine = q('[data-el="spine-fill"]');
   const tele = q('[data-el="telemetry"]');
-  const cursorProg = root.querySelector('.cursor__prog') as SVGCircleElement;
   let lastS = state.truck.s;
   let lastT = performance.now();
   let kmh = 0;
@@ -151,7 +173,6 @@ export function boot(root: HTMLElement) {
     }
     const p = t / DURATION;
     spine.style.transform = `scaleX(${p.toFixed(4)})`;
-    cursorProg.style.strokeDashoffset = String((1 - p).toFixed(4));
 
     const h = hero.p;
     const tl2 = `NAVU 400 117 2   X ${(h[0] / 100).toFixed(1)}  /  Z ${(h[2] / 100).toFixed(1)}  /  H ${(h[1] / 100).toFixed(1)} M`;
@@ -188,112 +209,141 @@ export function boot(root: HTMLElement) {
       tier++;
       avg = 16.7;
       e.setDpr(tiers[tier]);
+      dirty = true;
     } else if (avg < 13) {
       if (++calm > 90 && tier > 0) {
         tier--;
         calm = 0;
         e.setDpr(tiers[tier]);
+        dirty = true;
       }
     } else calm = 0;
   };
 
+  // Render only while any part of the section is on screen. Off screen the engine,
+  // water, HUD and governor cost nothing (the globe hero has the frame to itself).
+  let active = false;
+  const onScreen = ScrollTrigger.create({
+    trigger: root,
+    start: 'top bottom',
+    end: 'bottom top',
+    onToggle: (self) => {
+      active = self.isActive;
+      if (active) {
+        // Don't let the governor or speedo read the idle gap as one long frame.
+        lastT = lastFrame = performance.now();
+        avg = 16.7;
+        dirty = true;
+      }
+    },
+  });
+
+  let renderedT = NaN;
+  let entry: gsap.core.Timeline | null = null;
   const tick = () => {
+    if (!active) return;
+    // While the container doors still cover the stage (the seam under the globe), the
+    // world is invisible: spend nothing on it. It was rendered once at ready.
+    if (entry && entry.scrollTrigger && entry.scrollTrigger.progress < 0.03) return;
     govern();
-    e.render();
+    // The world only changes with the timeline, except at sea where the hull rides the
+    // swell in real time: skip identical frames everywhere else.
+    const t = tl.time();
+    if (dirty || t !== renderedT || ocean.root.visible) {
+      e.render();
+      renderedT = t;
+      dirty = false;
+    }
     water.visible = ocean.root.visible;
     water.render(e.view, e.W, e.H, oceanState(performance.now() / 1000));
     hud();
   };
   gsap.ticker.add(tick);
 
-  /* ---------------------------------------------------------------- cursor */
-  const cur = q('.cursor');
-  const fine = window.matchMedia('(pointer: fine)').matches;
-  let mx = window.innerWidth / 2, my = window.innerHeight / 2, cx = mx, cy = my;
-  const onMove = (ev: PointerEvent) => {
-    mx = ev.clientX;
-    my = ev.clientY;
-    cur.classList.add('is-live');
-    const t = ev.target as HTMLElement;
-    cur.classList.toggle('is-link', !!t.closest('a,button'));
-  };
-  const cursorTick = () => {
-    cx += (mx - cx) * 0.15;
-    cy += (my - cy) * 0.15;
-    cur.style.transform = `translate3d(${cx.toFixed(1)}px, ${cy.toFixed(1)}px, 0)`;
-  };
-  if (fine) {
-    window.addEventListener('pointermove', onMove, { passive: true });
-    gsap.ticker.add(cursorTick);
-  } else cur.style.display = 'none';
-
-  /* ---------------------------------------------------------------- header */
-  const hdr = q('.hdr');
-  let lastY = 0;
-  const onScroll = ({ scroll }: { scroll: number }) => {
-    hdr.classList.toggle('is-scrolled', scroll > 120);
-    hdr.classList.toggle('is-hidden', scroll > 400 && scroll > lastY + 2);
-    if (scroll < lastY - 2) hdr.classList.remove('is-hidden');
-    lastY = scroll;
-  };
-  lenis.on('scroll', onScroll);
-
   /* ---------------------------------------------------------------- chapter nav */
   const ticks = qa('.hud__tick');
   const onTick = (ev: Event) => {
     const t = Number((ev.currentTarget as HTMLElement).dataset.t);
-    const y = st.start + (st.end - st.start) * (t / tl.duration());
-    lenis.scrollTo(y, { duration: 1.8 });
+    scrollToY(st.start + (st.end - st.start) * (t / tl.duration()), 1.8);
   };
   ticks.forEach((b) => b.addEventListener('click', onTick));
 
-  /* ---------------------------------------------------------------- intro */
-  const veil = q('.veil');
-  const intro = gsap.timeline({ paused: true });
-  intro
-    .to(q('.veil__bar span'), { scaleX: 1, duration: 0.5, ease: 'power2.inOut' })
-    .to(veil, { yPercent: -100, duration: 0.9, ease: 'expo.inOut' }, '+=0.1')
-    .from(qa('.fr--hero .ln-i'), { yPercent: 140, backgroundPositionX: '100%', duration: 1.2, stagger: 0.09, ease: 'expo.out' }, '-=0.35')
-    .from(qa('.fr--hero [data-el]'), { autoAlpha: 0, y: 24, duration: 1, stagger: 0.08, ease: 'power3.out' }, '-=0.9')
-    .call(() => root.classList.add('is-ready'), undefined, '<');
-  gsap.to(q('.veil__bar span'), { scaleX: 0.7, duration: 0.9, ease: 'power2.out' });
-  // Mark hero lines as already revealed for the scrubbed timeline.
+  /* ---------------------------------------------------------------- entry (handoff from the globe) */
+  // The standalone app opened behind a veil with a timed intro. Embedded, the section
+  // arrives by scroll, so the opening is scroll-scrubbed too: the container doors swing
+  // out on their hinges and the opening copy rises from behind them. It is reversible
+  // (scrolling back up closes the doors over the globe's navy) and it never touches the
+  // properties the master timeline tweens (it moves .ln wrappers and .fr__in, never
+  // .ln-i / [data-el] / the frame itself).
   gsap.set(qa('.fr--hero .ln-i'), { backgroundPositionX: '0%' });
-  lenis.stop();
+  if (!reduced) {
+    const doorL = q('.door--l'), doorR = q('.door--r');
+    entry = gsap.timeline({
+      defaults: { ease: 'none' },
+      scrollTrigger: {
+        trigger: root,
+        start: 'top 12%',
+        end: () => `top+=${Math.round(view.clientHeight * 0.85)} top`,
+        scrub: true,
+        invalidateOnRefresh: true,
+      },
+    });
+    entry
+      .to(q('.doors__cue'), { autoAlpha: 0, y: 24, duration: 0.18, ease: 'power1.in' }, 0)
+      .fromTo(doorL, { rotationY: 0, '--sh': 0 }, { rotationY: -104, '--sh': 0.75, duration: 1, ease: 'power2.inOut' }, 0.04)
+      .fromTo(doorR, { rotationY: 0, '--sh': 0 }, { rotationY: 104, '--sh': 0.75, duration: 1, ease: 'power2.inOut' }, 0.04)
+      // The yard behind the doors: a slight push-in, as if stepping out of the box.
+      .fromTo(q('.stage--main'), { scale: 1.06 }, { scale: 1, duration: 1.04, ease: 'power2.out' }, 0)
+      .fromTo(q('.fr--hero .fr__in'), { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.25 }, 0.5)
+      .fromTo(qa('.fr--hero .ln'), { yPercent: 38, autoAlpha: 0 }, { yPercent: 0, autoAlpha: 1, duration: 0.42, stagger: 0.08, ease: 'power3.out' }, 0.46)
+      .to(q('.doors__head'), { yPercent: -100, autoAlpha: 0, duration: 0.4, ease: 'power2.in' }, 0.55)
+      .set(q('.doors'), { autoAlpha: 0 }, 1.04);
+  } else {
+    gsap.set(q('.doors'), { autoAlpha: 0 });
+  }
+
+  /* ---------------------------------------------------------------- layout */
+  // Fonts change line boxes; the shell height is fixed in svh, so this is the only late
+  // layout that matters here. Refreshes go through one shared, debounced scheduler.
+  let disposed = false;
   document.fonts.ready.then(() => {
+    if (disposed) return;
     size();
-    ScrollTrigger.refresh();
+    requestRefresh(0);
     tl.progress(st.progress);
     e.render();
-    intro.play();
-    intro.eventCallback('onComplete', () => {
-      veil.style.display = 'none';
-      lenis.start();
-    });
+    root.dataset.nxState = 'ready';
   });
+  requestRefresh();
 
-  /* ---------------------------------------------------------------- resize */
-  let rz = 0;
-  const onResize = () => {
+  let rz = 0, lastW = view.clientWidth, lastH = view.clientHeight;
+  const ro = new ResizeObserver(() => {
+    const w = view.clientWidth, h = view.clientHeight;
+    if (w === lastW && h === lastH) return;
+    lastW = w;
+    lastH = h;
     cancelAnimationFrame(rz);
     rz = requestAnimationFrame(() => {
       size();
-      ScrollTrigger.refresh();
+      requestRefresh();
     });
-  };
-  window.addEventListener('resize', onResize);
+  });
+  ro.observe(view);
 
   return () => {
-    window.removeEventListener('resize', onResize);
-    window.removeEventListener('pointermove', onMove);
+    disposed = true;
+    ro.disconnect();
+    cancelAnimationFrame(rz);
     ticks.forEach((b) => b.removeEventListener('click', onTick));
     gsap.ticker.remove(tick);
-    gsap.ticker.remove(raf);
-    gsap.ticker.remove(cursorTick);
+    entry?.scrollTrigger?.kill();
+    entry?.kill();
+    onScreen.kill();
     st.kill();
     tl.kill();
-    intro.kill();
-    lenis.destroy();
+    smooth.release();
     water.dispose();
+    for (const k of ownedFontVars) rootStyle.removeProperty(k);
+    delete (window as unknown as { NAV_DEV?: unknown }).NAV_DEV;
   };
 }

@@ -3,9 +3,14 @@
 /**
  * NAVAIR: the scroll experience.
  *
- * One fixed viewport, one tall track, one scrubbed master timeline. The stage
+ * One sticky viewport, one tall track, one scrubbed master timeline. The stage
  * is a single <svg> driven by the orthographic engine; every chapter's copy
  * lives in the same timeline so scrolling back reverses everything exactly.
+ *
+ * Embedded in the logistics homepage by NavairSequence (the section shell that
+ * owns the track height, the #services anchor and lazy mounting). This
+ * component fills that shell; the .view is sticky, so the stage is pinned only
+ * while the shell is on screen and releases on its own at the end.
  */
 
 import { useEffect, useRef } from 'react';
@@ -45,38 +50,14 @@ export default function Experience() {
   }, []);
 
   return (
-    <div className="nx" ref={rootRef}>
-      {/* ------------------------------------------------ header */}
-      <header className="hdr">
-        <a className="hdr__logo" href="#top" aria-label="NAVAIR home">
-          <svg viewBox="0 0 40 40" className="hdr__glyph" aria-hidden="true">
-            <path d="M6 32V8h6l16 16V8h6v24h-6L12 16v16z" />
-          </svg>
-          <span className="hdr__word">NAVAIR</span>
-        </a>
-        <button className="hdr__menu" type="button">
-          <span className="hdr__dots" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-          Menu
-        </button>
-        <div className="hdr__marquee" aria-hidden="true">
-          <div className="hdr__marquee-track">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <span key={i}>Follow NAVAIR on LinkedIn&nbsp;&nbsp;•&nbsp;&nbsp;</span>
-            ))}
-          </div>
-        </div>
-        <a className="hdr__cta" href="#contact">
-          <span>Work with us</span>
-        </a>
-      </header>
+    <div className="nx" ref={rootRef} data-nx-state="booting">
+      {/*
+        Integration note: the standalone app's own <header className="hdr"> is retired here.
+        On the Navair Logistics homepage the site navigation lives in <GlobeHero />.
+      */}
 
-      {/* ------------------------------------------------ fixed viewport */}
-      <div className="view" aria-hidden="false">
+      {/* ------------------------------------------------ sticky viewport (pinned only while the section is in view) */}
+      <div className="view">
         <div className="back" aria-hidden="true">
           <div className="back__word" data-el="services-word">
             Everything freight needs&nbsp;&nbsp;/&nbsp;&nbsp;Everything freight needs
@@ -117,20 +98,22 @@ export default function Experience() {
         {/* ------------------------------------------------ chapter frames */}
         <div className="front">
           <section className="fr fr--hero" data-fr="hero">
+            <div className="fr__in">
             <p className="eyebrow" data-el>
               <span className="dot" /> Freight forwarding, land transport, customs
             </p>
-            <h1 className="h-xl">
+            <h2 className="h-xl">
               <Lines lines={['One box.', ['Every mile.', 'is-accent']]} />
-            </h1>
+            </h2>
             <p className="lede" data-el>
               Forwarding, trucking and customs brokerage under one accountable team. Follow a single NAVAIR container
               from the stack to the sea.
             </p>
             <div className="hero-cta" data-el>
-              <a className="btn btn--solid" href="#contact">
+              <a className="btn btn--solid" href="#enquiry">
                 Start a shipment
               </a>
+            </div>
             </div>
           </section>
 
@@ -221,9 +204,9 @@ export default function Experience() {
             <h2 className="h-xl h-inv">
               <Lines lines={['Wherever', ['it’s going.', 'is-note']]} />
             </h2>
-            <div className="sea-cta" data-el id="contact">
-              <a className="btn btn--light" href="mailto:hello@navair.example">
-                Work with us
+            <div className="sea-cta" data-el>
+              <a className="btn btn--light" href="#enquiry">
+                Start an enquiry
               </a>
               <p className="body body--inv">One operator from origin to destination. Tell us where the box goes next.</p>
             </div>
@@ -265,27 +248,39 @@ export default function Experience() {
             <span className="hud__fill" data-el="spine-fill" />
           </div>
         </div>
-      </div>
 
-      <div className="track" style={{ height: `${(DURATION + 1) * 100}svh` }} />
-
-      {/* ------------------------------------------------ cursor + veil */}
-      <div className="cursor" aria-hidden="true">
-        <div className="cursor__ring">
-          <svg viewBox="0 0 64 64">
-            <circle className="cursor__track" cx="32" cy="32" r="30" />
-            <circle className="cursor__prog" cx="32" cy="32" r="30" pathLength="1" />
-          </svg>
+        {/* ------------------------------------------------ handoff: container doors
+            The globe hero is deep navy; the yard is daylight. The section opens as the
+            hero box's own doors (its real markings), swung open by scroll, so the colour
+            change is a scene change rather than a seam. */}
+        <div className="doors" aria-hidden="true">
+          <span className="doors__head" />
+          <div className="door door--l">
+            <span className="door__rod" />
+            <span className="door__rod" />
+            <div className="door__mark">
+              <b>NAVU 400117 2</b>
+              <span>45G1</span>
+            </div>
+          </div>
+          <div className="door door--r">
+            <span className="door__rod" />
+            <span className="door__rod" />
+            <dl className="door__plate">
+              <div><dt>Max gross</dt><dd>32,500 kg</dd></div>
+              <div><dt>Tare</dt><dd>3,900 kg</dd></div>
+              <div><dt>Payload</dt><dd>28,600 kg</dd></div>
+            </dl>
+          </div>
+          <div className="doors__cue">
+            <span className="doors__eyebrow">From the stack to the sea</span>
+            <span className="doors__line" />
+          </div>
         </div>
-        <div className="cursor__dot" />
       </div>
 
-      <div className="veil" aria-hidden="true">
-        <div className="veil__word">NAVAIR</div>
-        <div className="veil__bar">
-          <span />
-        </div>
-      </div>
+      {/* The scroll track is the section shell itself (NavairSequence sets its height). The
+          standalone app's custom cursor and loading veil are retired: the site has its own loader. */}
     </div>
   );
 }

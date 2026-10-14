@@ -1,0 +1,14 @@
+/* Section shell for the Navair sequence (server-rendered; the sequence chunk mounts inside). */
+.shell{position:relative;isolation:isolate;background:#071125;contain:layout style}
+.poster{position:sticky;top:0;height:100svh;overflow:hidden;background:#071125}
+/* Same corrugated door face the sequence opens on, so mount is invisible. */
+.posterDoors{position:absolute;inset:0;background:
+  linear-gradient(90deg,transparent calc(50% - 1px),#ddbd7766 calc(50% - 1px) calc(50% + 1px),transparent calc(50% + 1px)),
+  repeating-linear-gradient(90deg,#ffffff07 0 2px,transparent 2px 22px,#00000038 22px 25px,transparent 25px 46px),
+  linear-gradient(180deg,#081329 0%,#0b1a36 55%,#0a1630 100%)}
+.anchor{position:absolute;left:0;width:1px;height:1px;pointer-events:none;scroll-margin-top:0}
+.anchor:focus{outline:none}
+.end{position:absolute;left:0;bottom:0;width:1px;height:1px;pointer-events:none}
+.end:focus{outline:none}
+.skip{position:absolute;z-index:80;top:16px;left:16px;padding:12px 18px;border-radius:999px;background:#f7f9fc;color:#14233c;font:600 13px/1 var(--font-ui,'Inter Variable',sans-serif);text-decoration:none;transform:translateY(-200%);opacity:0;transition:transform .3s,opacity .3s}
+.skip:focus-visible{transform:none;opacity:1;outline:2px solid #ddbd77;outline-offset:3px}

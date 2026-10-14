@@ -15,8 +15,8 @@ export const C = {
   concrete2: '#CBCAC2',
 
   /** NAVAIR electric blue. */
-  blue: '#1B2CFF',
-  blueDeep: '#0B18B5',
+  blue: '#0835B1', // site brand blue (was electric #1B2CFF in the standalone app)
+  blueDeep: '#06267F',
   /** Signal orange. */
   signal: '#FF5A1F',
   hazard: '#F2B705',
