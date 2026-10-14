@@ -518,7 +518,8 @@
 }
 .nx .hud__telemetry {
   position: absolute;
-  right: var(--gut);
+  /* Clear the fixed "Ask Navair" launcher in the bottom-right corner. */
+  right: calc(var(--gut) + 170px);
   bottom: 30px;
   font-size: 10px;
   color: var(--fg-soft);

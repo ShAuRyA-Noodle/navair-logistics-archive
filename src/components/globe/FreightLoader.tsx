@@ -1,6 +1,5 @@
 'use client';
-import {useEffect, useRef, useState, useSyncExternalStore} from 'react';
-import {filmReadiness} from '../scene/film-readiness';
+import {useEffect, useRef, useState} from 'react';
 import styles from './freight-loader.module.css';
 
 function Ship(){return <><path d="M-13 3h26l-4 8H-8l-5-8Zm5 0V-5H5v8M-4-5v-5h5v5M-15 14q4-3 8 0t8 0 8 0 7 0"/><path d="M-5-1h3m3 0h3"/></>}
@@ -9,8 +8,9 @@ function Truck(){return <><path d="M-15-8H4V8h-19V-8Zm19 4h6l5 7v5H4M5 2h9"/><ci
 
 export function FreightLoader({sceneReady, reduced, onComplete}: {sceneReady:boolean; reduced:boolean; onComplete:()=>void}) {
   const overlay = useRef<HTMLDivElement>(null);
-  const film = useSyncExternalStore(filmReadiness.subscribe, filmReadiness.get, filmReadiness.server);
-  const [minimum, setMinimum] = useState(false), [escape, setEscape] = useState(false), [timeout, setTimeoutReached] = useState(false);
+  // The loader waits only for the globe scene (GPU programs compiled) plus one lap of
+  // the orbit animation. It no longer depends on the retired plane film.
+  const [minimum, setMinimum] = useState(false), [escape, setEscape] = useState(false);
   const [finished, setFinished] = useState(false);
   useEffect(() => {
     if (finished || !overlay.current) return;
@@ -36,8 +36,7 @@ export function FreightLoader({sceneReady, reduced, onComplete}: {sceneReady:boo
   }, [finished]);
   useEffect(() => {
     const b = window.setTimeout(() => setEscape(true), 5000);
-    const c = window.setTimeout(() => setTimeoutReached(true), 12000);
-    return () => { clearTimeout(b); clearTimeout(c); };
+    return () => clearTimeout(b);
   }, []);
   useEffect(() => {
     if (!sceneReady) return;
@@ -46,10 +45,8 @@ export function FreightLoader({sceneReady, reduced, onComplete}: {sceneReady:boo
   }, [sceneReady]);
   useEffect(() => {
     if (finished || !sceneReady) return;
-    if ((minimum || reduced) && (film === 'ready' || film === 'error' || reduced || timeout)) {
-      setFinished(true); onComplete();
-    }
-  }, [sceneReady, film, minimum, reduced, timeout, finished, onComplete]);
+    if (minimum || reduced) { setFinished(true); onComplete(); }
+  }, [sceneReady, minimum, reduced, finished, onComplete]);
   const enter = () => { setFinished(true); onComplete(); };
   return <div ref={overlay} className={styles.loader} data-navair-loader data-scene-ready={sceneReady} data-complete={finished} aria-hidden={finished}>
     <div className={styles.composition}>
@@ -66,7 +63,7 @@ export function FreightLoader({sceneReady, reduced, onComplete}: {sceneReady:boo
       </svg>
       <div className={styles.identity}><strong>NAVAIR</strong><span>LOGISTICS</span><i/></div>
     </div>
-    <p className={styles.status} role="status">{finished ? 'Ready to explore' : !sceneReady ? 'Preparing your world' : film === 'loading' && minimum ? 'Preparing the film' : 'Every leg. One journey.'}</p>
+    <p className={styles.status} role="status">{finished ? 'Ready to explore' : !sceneReady ? 'Preparing your world' : 'Every leg. One journey.'}</p>
     <div className={styles.escape}>{escape && sceneReady && !finished && <button type="button" onClick={enter}>Enter website <span aria-hidden="true">↗</span></button>}</div>
   </div>;
 }

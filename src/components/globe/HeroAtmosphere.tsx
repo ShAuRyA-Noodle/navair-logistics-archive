@@ -14,15 +14,25 @@ export function HeroAtmosphere() {
   useEffect(() => {
     const stage = host.current?.parentElement;
     if (!stage || reduced || !matchMedia('(hover:hover) and (pointer:fine)').matches) return;
+    // Measure on enter/scroll/resize, never per pointer event: a rect read after the
+    // scroll timeline has written styles forces a synchronous layout.
+    let rect: DOMRect | null = null;
+    const stale = () => { rect = null; };
     const move = (event: PointerEvent) => {
-      const rect = stage.getBoundingClientRect();
+      rect ??= stage.getBoundingClientRect();
       x.set((event.clientX / rect.width - .5) * -12);
       y.set(((event.clientY - rect.top) / rect.height - .5) * -10);
     };
     const reset = () => { x.set(0); y.set(0); };
+    stage.addEventListener('pointerenter', stale, {passive: true});
     stage.addEventListener('pointermove', move, {passive: true});
     stage.addEventListener('pointerleave', reset);
-    return () => { stage.removeEventListener('pointermove', move); stage.removeEventListener('pointerleave', reset); reset(); };
+    window.addEventListener('scroll', stale, {passive: true});
+    window.addEventListener('resize', stale, {passive: true});
+    return () => {
+      stage.removeEventListener('pointerenter', stale); stage.removeEventListener('pointermove', move); stage.removeEventListener('pointerleave', reset);
+      window.removeEventListener('scroll', stale); window.removeEventListener('resize', stale); reset();
+    };
   }, [reduced, x, y]);
   return <div className={styles.space} ref={host} aria-hidden="true">
     <motion.div className={styles.atmosphereLayers} style={{x: sx, y: sy}}>

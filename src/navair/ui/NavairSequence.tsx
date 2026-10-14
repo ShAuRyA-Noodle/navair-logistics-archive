@@ -16,7 +16,6 @@
 
 import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
-import { filmReadiness } from '@/components/scene/film-readiness';
 import { CHAPTERS, DURATION } from '../story';
 import styles from './sequence.module.css';
 
@@ -29,10 +28,6 @@ export function NavairSequence() {
   const shell = useRef<HTMLElement>(null);
   const [mounted, setMounted] = useState(false);
 
-  // The globe's FreightLoader still waits on the (retired) plane film's readiness store.
-  // This section never needs the loader to wait: its shell is server-rendered at full
-  // height and the engine warms lazily, so report ready at once.
-  useEffect(() => { filmReadiness.set('ready'); }, []);
 
   useEffect(() => {
     const el = shell.current;

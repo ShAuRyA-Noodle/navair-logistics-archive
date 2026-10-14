@@ -455,12 +455,17 @@ function batch(ops: Op[]): Op[] {
       cur.clips === op.clips
     ) {
       cur.path.addPath((op as PathOp).path, new DOMMatrix(op.m));
+      // Keep a conservative union of the merged bounds so the drawer can still cull.
+      if (cur.bb && op.bb) {
+        const b = xformBox(op.m, op.bb);
+        cur.bb = [Math.min(cur.bb[0], b[0]), Math.min(cur.bb[1], b[1]), Math.max(cur.bb[2], b[2]), Math.max(cur.bb[3], b[3])];
+      } else cur.bb = null;
       continue;
     }
     if (mergeable) {
       const p = new Path2D();
       p.addPath((op as PathOp).path, new DOMMatrix(op.m));
-      cur = { ...(op as PathOp), path: p, m: I, bb: null };
+      cur = { ...(op as PathOp), path: p, m: I, bb: op.bb ? xformBox(op.m, op.bb) : null };
       out.push(cur);
     } else {
       cur = null;
@@ -600,6 +605,28 @@ function shapeOf(el: Element): { path: Path2D; box: [number, number, number, num
   return null;
 }
 
+/**
+ * Conservative art-space bounds of everything a picture can paint (stroke miters
+ * included), or null when any op's extent is unknown. Cached per picture.
+ */
+const boundsCache = new WeakMap<Picture, Box | null>();
+export function pictureBounds(pic: Picture): Box | null {
+  if (boundsCache.has(pic)) return boundsCache.get(pic)!;
+  let out: Box | null = null;
+  for (const op of pic.ops) {
+    if (!op.bb) {
+      out = null;
+      break;
+    }
+    // Text bounds are an estimate (0.75 em per glyph); widen them generously for wide faces.
+    const ex = op.t === 'p' ? (op.stroke && op.lw > 0 ? op.lw * 4 : 0) : ((op.bb[3] - op.bb[1]) / 1.6) * (0.4 * op.text.length + 1);
+    const b = xformBox(op.m, [op.bb[0] - ex, op.bb[1] - ex, op.bb[2] + ex, op.bb[3] + ex]);
+    out = out ? [Math.min(out[0], b[0]), Math.min(out[1], b[1]), Math.max(out[2], b[2]), Math.max(out[3], b[3])] : b;
+  }
+  boundsCache.set(pic, out);
+  return out;
+}
+
 /* ------------------------------------------------------------------ drawing */
 
 const gradCache = new WeakMap<Element, Map<string, CanvasGradient | CanvasPattern | null>>();
@@ -686,15 +713,54 @@ function setM(ctx: CanvasRenderingContext2D, M: Mat, m: Mat) {
   );
 }
 
-/** Draw a compiled picture under screen matrix M with extra alpha. */
-export function drawPicture(ctx: CanvasRenderingContext2D, pic: Picture, M: Mat, alpha: number) {
+/** Unset marker for the per-call canvas state cache (no real state value equals it). */
+const UNSET = Symbol('unset');
+
+/**
+ * Draw a compiled picture under screen matrix M with extra alpha.
+ *
+ * `view` (device px) enables per-op culling: a path op whose transformed bounds
+ * miss the canvas is skipped. Bounds are conservative (stroke width, miter joins
+ * and an antialiasing margin included), so output is pixel-identical. Canvas
+ * state is only written when it changes; ctx.restore() invalidates the cache.
+ */
+export function drawPicture(ctx: CanvasRenderingContext2D, pic: Picture, M: Mat, alpha: number, view?: { w: number; h: number }) {
   let curClips: Clip[] | null = null;
   let saved = false;
+  let sAlpha: number | symbol = UNSET, sFill: unknown = UNSET, sStroke: unknown = UNSET, sLw: number | symbol = UNSET;
+  let sCap: unknown = UNSET, sJoin: unknown = UNSET, sFont: unknown = UNSET, sAlign: unknown = UNSET;
+  let sLs: number | symbol = UNSET, sStretch: unknown = UNSET, sBase: unknown = UNSET;
+  const invalidate = () => {
+    sAlpha = sFill = sStroke = sLw = sCap = sJoin = sFont = sAlign = sLs = sStretch = sBase = UNSET;
+  };
+  const vw = view ? view.w : 0, vh = view ? view.h : 0;
   for (const op of pic.ops) {
+    const m = op.m;
+    // Combined screen transform M·m (same arithmetic as setM).
+    const t0 = M[0] * m[0] + M[2] * m[1];
+    const t1 = M[1] * m[0] + M[3] * m[1];
+    const t2 = M[0] * m[2] + M[2] * m[3];
+    const t3 = M[1] * m[2] + M[3] * m[3];
+    const t4 = M[0] * m[4] + M[2] * m[5] + M[4];
+    const t5 = M[1] * m[4] + M[3] * m[5] + M[5];
+    if (view && op.t === 'p' && op.bb) {
+      const bb = op.bb;
+      // Miter joins can reach miterLimit·lw/2 = 5·lw beyond the outline (bb already pads 1·lw).
+      const ex = op.stroke && op.lw > 0 ? op.lw * 4 : 0;
+      const bx0 = bb[0] - ex, by0 = bb[1] - ex, bx1 = bb[2] + ex, by1 = bb[3] + ex;
+      const xa = t0 * bx0, xb = t0 * bx1, ya = t2 * by0, yb = t2 * by1;
+      const x0 = (xa < xb ? xa : xb) + (ya < yb ? ya : yb) + t4;
+      const x1 = (xa > xb ? xa : xb) + (ya > yb ? ya : yb) + t4;
+      const ua = t1 * bx0, ub = t1 * bx1, va = t3 * by0, vb = t3 * by1;
+      const y0 = (ua < ub ? ua : ub) + (va < vb ? va : vb) + t5;
+      const y1 = (ua > ub ? ua : ub) + (va > vb ? va : vb) + t5;
+      if (x1 < -2 || y1 < -2 || x0 > vw + 2 || y0 > vh + 2) continue;
+    }
     if (op.clips !== curClips) {
       if (saved) {
         ctx.restore();
         saved = false;
+        invalidate();
       }
       curClips = op.clips;
       if (op.clips.length) {
@@ -706,24 +772,26 @@ export function drawPicture(ctx: CanvasRenderingContext2D, pic: Picture, M: Mat,
         }
       }
     }
-    setM(ctx, M, op.m);
+    ctx.setTransform(t0, t1, t2, t3, t4, t5);
     if (op.t === 'p') {
       if (op.fill && op.fa > 0) {
         const f = resolvePaint(ctx, pic, op.fill);
         if (f) {
-          ctx.globalAlpha = alpha * op.fa;
-          ctx.fillStyle = f;
+          const ga = alpha * op.fa;
+          if (ga !== sAlpha) ctx.globalAlpha = sAlpha = ga;
+          if (f !== sFill) ctx.fillStyle = sFill = f;
           ctx.fill(op.path);
         }
       }
       if (op.stroke && op.sa > 0 && op.lw > 0) {
         const s = resolvePaint(ctx, pic, op.stroke);
         if (s) {
-          ctx.globalAlpha = alpha * op.sa;
-          ctx.strokeStyle = s;
-          ctx.lineWidth = op.lw;
-          ctx.lineCap = op.cap;
-          ctx.lineJoin = op.join;
+          const ga = alpha * op.sa;
+          if (ga !== sAlpha) ctx.globalAlpha = sAlpha = ga;
+          if (s !== sStroke) ctx.strokeStyle = sStroke = s;
+          if (op.lw !== sLw) ctx.lineWidth = sLw = op.lw;
+          if (op.cap !== sCap) ctx.lineCap = sCap = op.cap;
+          if (op.join !== sJoin) ctx.lineJoin = sJoin = op.join;
           if (op.dash) {
             ctx.setLineDash(op.dash);
             ctx.lineDashOffset = op.dashOff;
@@ -735,13 +803,15 @@ export function drawPicture(ctx: CanvasRenderingContext2D, pic: Picture, M: Mat,
     } else {
       const f = op.fill ? resolvePaint(ctx, pic, op.fill) : null;
       if (f && op.fa > 0) {
-        ctx.globalAlpha = alpha * op.fa;
-        ctx.fillStyle = f;
-        ctx.font = op.font;
-        ctx.textAlign = op.align;
-        ctx.textBaseline = 'alphabetic';
-        ctx.letterSpacing = `${op.ls}px`;
-        ctx.fontStretch = op.stretch as CanvasFontStretch;
+        const ga = alpha * op.fa;
+        if (ga !== sAlpha) ctx.globalAlpha = sAlpha = ga;
+        if (f !== sFill) ctx.fillStyle = sFill = f;
+        // Setting the font shorthand resets its sub-properties (stretch etc.).
+        if (op.font !== sFont) { ctx.font = sFont = op.font; sStretch = sLs = UNSET; }
+        if (op.align !== sAlign) ctx.textAlign = sAlign = op.align;
+        if (sBase !== 'alphabetic') ctx.textBaseline = sBase = 'alphabetic';
+        if (op.ls !== sLs) { sLs = op.ls; ctx.letterSpacing = `${op.ls}px`; }
+        if (op.stretch !== sStretch) ctx.fontStretch = sStretch = op.stretch as CanvasFontStretch;
         ctx.fillText(op.text, op.x, op.y);
       }
     }

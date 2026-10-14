@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, useMotionValue, useReducedMotion, useSpring } from 'motion/react';
-import { useEffect, useRef, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import interactionStyles from './animated-cta.module.css';
 import styles from './globe-hero.module.css';
 
@@ -9,7 +9,12 @@ import styles from './globe-hero.module.css';
 export function AnimatedCta({ children, href, onClick, secondary = false, className = '' }: {
   children: ReactNode; href?: string; onClick?: () => void; secondary?: boolean; className?: string;
 }) {
-  const reduced = useReducedMotion();
+  // useReducedMotion() is null on the server and true/false on the client's first
+  // render; applying it before mount changes whileTap/style and breaks hydration.
+  const prefersReduced = useReducedMotion();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const reduced = mounted && Boolean(prefersReduced);
   const bounds = useRef<DOMRect | null>(null);
   const limits = useRef({ x: 0, y: 0 });
   const x = useMotionValue(0);

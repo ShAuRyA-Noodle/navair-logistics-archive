@@ -343,6 +343,7 @@ export function boot(root: HTMLElement) {
     tl.kill();
     smooth.release();
     water.dispose();
+    e.dispose();
     for (const k of ownedFontVars) rootStyle.removeProperty(k);
     delete (window as unknown as { NAV_DEV?: unknown }).NAV_DEV;
   };

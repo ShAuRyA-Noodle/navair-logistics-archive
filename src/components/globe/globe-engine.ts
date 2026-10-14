@@ -240,11 +240,40 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
     const normal = new THREE.Vector3();
     const toCamera = new THREE.Vector3();
     let lastLabelYaw = NaN, lastLabelPitch = NaN, lastLabelScroll = NaN, lastLabelFocus = NaN;
+    // Layout reads are never taken inside the frame: a getBoundingClientRect after the
+    // scroll timeline has written transforms forces a full style/layout flush (4–30 ms
+    // on mid-range CPUs). Bounds are re-measured in a task after the frame is painted,
+    // when layout is clean, and labels are corrected on the next frame if they moved.
+    let bounds = { left: 0, top: 0, width: 1, height: 1 };
+    let windowWidth = window.innerWidth;
+    let measureTimer = 0;
+    let measured = false;
+    const selectedWidths = [0, 0];
+    function measureLayout() {
+      measureTimer = 0;
+      if (destroyed) return;
+      const rect = host.getBoundingClientRect();
+      windowWidth = window.innerWidth;
+      let changed = !measured || Math.abs(rect.left - bounds.left) > 0.25 || Math.abs(rect.top - bounds.top) > 0.25 || Math.abs(rect.width - bounds.width) > 0.25;
+      measured = true;
+      bounds = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+      selectedLabels.forEach((label, index) => {
+        const width = label.active ? label.element.offsetWidth : 0;
+        if (width !== selectedWidths[index]) { selectedWidths[index] = width; changed = true; }
+      });
+      if (changed) {
+        lastLabelScroll = NaN;
+        if (!frame) resume();
+      }
+    }
+    function scheduleMeasure() {
+      if (!measureTimer && !destroyed) measureTimer = window.setTimeout(measureLayout, 0);
+    }
     const setLabelOpacity = (element: HTMLElement, value: number) => {
       const next = value.toFixed(3);
       if (Number(element.style.opacity) !== Number(next)) element.style.opacity = next;
     };
-    function updateLabels(bounds: DOMRect) {
+    function updateLabels() {
       globe.updateMatrixWorld();
       const occupied: { x: number; y: number }[] = [];
       const displayScale = bounds.width / viewportWidth;
@@ -259,7 +288,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
         const x = (projected.x * 0.5 + 0.5) * viewportWidth + 8;
         const y = (-projected.y * 0.5 + 0.5) * viewportHeight - 8;
         if (mobileMap) {
-          const box = screenBoxes.length < 8 ? placeMapLabel(bounds.left + (x - 8) * displayScale, bounds.top + (y + 8) * displayScale, label.labelWidth, window.innerWidth, screenBoxes) : null;
+          const box = screenBoxes.length < 8 ? placeMapLabel(bounds.left + (x - 8) * displayScale, bounds.top + (y + 8) * displayScale, label.labelWidth, windowWidth, screenBoxes) : null;
           label.element.style.transformOrigin = 'top left';
           setLabelOpacity(label.element, box ? (1 - focus.value) * THREE.MathUtils.smoothstep(morph.value, 0.95, 1) : 0);
           if (box) {
@@ -268,7 +297,10 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
           }
           continue;
         }
-        const show = occupied.length < (isMobile ? 4 : 8) && facing > 0.2 && bounds.left + x * displayScale > 4 && bounds.left + (x + label.labelWidth) * displayScale < window.innerWidth - 4 && x > 0 && x < viewportWidth - 80 && y > 0 && y < viewportHeight - 20 && !occupied.some((point) => Math.abs(point.x - x) < 125 && Math.abs(point.y - y) < 28);
+        // Sphere labels stay clear of the header band, and on phones they would sit
+        // under the headline and CTAs, so phones only label the unfolded map.
+        const screenY = bounds.top + y * displayScale;
+        const show = !isMobile && screenY > 112 && occupied.length < 8 && facing > 0.2 && bounds.left + x * displayScale > 4 && bounds.left + (x + label.labelWidth) * displayScale < windowWidth - 4 && x > 0 && x < viewportWidth - 80 && y > 0 && y < viewportHeight - 20 && !occupied.some((point) => Math.abs(point.x - x) < 125 && Math.abs(point.y - y) < 28);
         setLabelOpacity(label.element, show ? THREE.MathUtils.smoothstep(facing, 0.2, 0.42) * (1 - Math.sin(morph.value * Math.PI)) * (1 - focus.value) : 0);
         if (show || Number(label.element.style.opacity) > 0) label.element.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
         if (show) {
@@ -448,6 +480,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       });
       if (reducedMotion) focus.value = focusTarget;
       lastLabelScroll = NaN;
+      scheduleMeasure();
       resume();
     }
     function draw() {
@@ -474,10 +507,9 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
         const labelsChanged = lastLabelYaw !== globe.rotation.y || lastLabelPitch !== globe.rotation.x || lastLabelScroll !== scroll || Math.abs(lastLabelFocus - focus.value) > 0.001 || Number.isNaN(lastLabelFocus);
         if (labelsChanged) {
           lastLabelYaw = globe.rotation.y; lastLabelPitch = globe.rotation.x; lastLabelScroll = scroll; lastLabelFocus = focus.value;
-          // Read layout once, before any label writes. Static maps only animate their GPU routes.
-          const bounds = host.getBoundingClientRect();
-          const selectedWidths = selectedLabels.map(label => label.active ? label.element.offsetWidth : 0);
-          updateLabels(bounds);
+          // Layout is measured after paint (see measureLayout); never read it here.
+          if (!measured) scheduleMeasure();
+          updateLabels();
           for (const [labelIndex, label] of selectedLabels.entries()) {
             if (!label.active) { setLabelOpacity(label.element, 0); continue; }
             const point = countryPosition(label.country).applyMatrix4(globe.matrixWorld).lerp(new THREE.Vector3(...flatLocation(label.country.latitude, label.country.longitude)), morph.value).project(camera);
@@ -486,7 +518,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
             if (isMobile && morph.value > 0.95) {
               const scale = bounds.width / viewportWidth;
               const labelWidth = selectedWidths[labelIndex];
-              const screenX = Math.max(8 + labelWidth / 2, Math.min(window.innerWidth - 8 - labelWidth / 2, bounds.left + x * scale));
+              const screenX = Math.max(8 + labelWidth / 2, Math.min(windowWidth - 8 - labelWidth / 2, bounds.left + x * scale));
               label.element.style.transformOrigin = 'top left';
               label.element.style.transform = `translate3d(${(screenX - bounds.left) / scale}px,${y - 17}px,0) scale(${1 / scale}) translate(-50%,-100%)`;
             } else {
@@ -598,6 +630,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       renderer.setPixelRatio(dpr);
       renderer.setSize(width, height, false);
       landMaterial.uniforms.uPointSize.value = Math.max(1.05, Math.min(width, height) * 0.0017) * dpr;
+      scheduleMeasure();
       draw();
     }
     resizeObserver = new ResizeObserver(resize);
@@ -638,6 +671,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
       renderer.domElement.removeEventListener('pointercancel', onPointerEnd);
       renderer.domElement.removeEventListener('lostpointercapture', onPointerEnd);
       window.removeEventListener('resize', resize);
+      window.removeEventListener('scroll', scheduleMeasure);
       document.removeEventListener('visibilitychange', resume);
       renderer.domElement.removeEventListener('webglcontextlost', onLost);
       renderer.domElement.removeEventListener('webglcontextrestored', onRestored);
@@ -651,14 +685,19 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
     renderer.domElement.addEventListener('webglcontextrestored', onRestored);
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('resize', resize, { passive: true });
+    window.addEventListener('scroll', scheduleMeasure, { passive: true });
     resize();
     prepare();
     return {
       setRoute,
       setScroll(progress) {
         if (reducedMotion) return;
-        scroll = Number.isFinite(progress) ? THREE.MathUtils.clamp(progress, 0, 1) : 0;
-        renderer.domElement.style.cursor = scroll > 0.001 ? 'default' : 'grab';
+        const next = Number.isFinite(progress) ? THREE.MathUtils.clamp(progress, 0, 1) : 0;
+        if (next === scroll) return;
+        scroll = next;
+        scheduleMeasure();
+        const cursor = scroll > 0.001 ? 'default' : 'grab';
+        if (renderer.domElement.style.cursor !== cursor) renderer.domElement.style.cursor = cursor;
         if (!frame) { applyRotation(); draw(); }
       },
       setReducedMotion(value) {
@@ -677,6 +716,7 @@ export function createGlobe(host: HTMLElement, options: GlobeOptions = {}): Glob
         destroyed = true;
         cancelAnimationFrame(frame);
         cancelAnimationFrame(readinessFrame);
+        window.clearTimeout(measureTimer);
         resizeObserver?.disconnect();
         intersectionObserver?.disconnect();
         removeListeners();

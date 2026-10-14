@@ -118,3 +118,25 @@
   .launcher { transition: none; }
   .messages { scroll-behavior: auto; }
 }
+
+/* Performance + motion polish.
+   SVG child animations cannot run on the compositor, so the spark only twinkles on
+   intent (hover/focus) instead of repainting the launcher every frame forever. The
+   idle float stays: it animates the <svg> box itself (composited transform). */
+.launcher { transition: box-shadow .45s cubic-bezier(.16, 1, .3, 1), transform .45s cubic-bezier(.16, 1, .3, 1), background-color .3s ease; -webkit-tap-highlight-color: transparent; }
+.launcher:active { transform: translateY(0) scale(.97); transition-duration: .12s; }
+.mascot { will-change: transform; }
+.mascotSpark { animation-play-state: paused; }
+.launcher:is(:hover, :focus-visible) .mascotSpark { animation-play-state: running; }
+.panel { transform-origin: bottom right; }
+@media (prefers-reduced-motion: reduce) { .mascot { will-change: auto; } .launcher:active { transform: none; } }
+
+/* Phones: a compact mascot button keeps the launcher off the sequence HUD and CTAs.
+   The accessible name comes from aria-label, so hiding the visual label is safe. */
+@media (max-width: 520px) {
+  .launcher { gap: 0; height: 54px; padding: 3px; width: 54px; justify-content: center; }
+  .launchLabel { display: none; }
+  .launchMascot { height: 48px; width: 48px; }
+  .mascot { height: 46px; width: 46px; }
+  .panel { bottom: 64px; }
+}

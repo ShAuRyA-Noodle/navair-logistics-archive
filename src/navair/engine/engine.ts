@@ -14,6 +14,7 @@
  */
 
 import { compile, drawPicture, type Mat, type Picture } from './picture';
+import { SpriteCache } from './sprites';
 import {
   type M3,
   type V3,
@@ -34,6 +35,8 @@ import {
 } from './math';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
+/** Faces with fewer ops than this draw as vectors (as cheap as a textured quad). */
+const SPRITE_MIN_OPS = 3;
 
 export interface FaceDef {
   /** Local-space origin of the art's (0,0). */
@@ -82,6 +85,8 @@ interface FaceRt {
   /** Canvas backend. */
   pic: Picture | null;
   shadePath: Path2D | null;
+  /** Sprite-cache id for the canvas backend (0: always draw vectors). */
+  sid: number;
   M: Mat;
   alpha: number;
   depth: number;
@@ -97,6 +102,8 @@ interface DiscRt {
   spinEl: SVGGElement | null;
   pic: Picture | null;
   innerPic: Picture | null;
+  sid: number;
+  isid: number;
   M: Mat;
   sign: number;
   depth: number;
@@ -299,10 +306,18 @@ export class Engine {
   private constraints: (() => void)[] = [];
   private afterRender: ((e: Engine) => void)[] = [];
   dirty = true;
+  /**
+   * Canvas backend: draw multi-op face art from cached bitmaps (see sprites.ts)
+   * instead of re-rasterising every vector op each frame.
+   */
+  useSprites = true;
+  private sprites: SpriteCache | null = null;
 
   /** Main plane: an <svg> (DOM backend, used by /lab) or a <canvas> (Canvas2D backend). */
   constructor(target: SVGSVGElement | HTMLCanvasElement, opts: { dpr?: number } = {}) {
     if (opts.dpr) this.dpr = opts.dpr;
+    // Dev-only handle for the perf harness (scratch benchmarks call render()/repaint()).
+    if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') (window as unknown as { __navairEngine?: Engine }).__navairEngine = this;
     if (target instanceof HTMLCanvasElement) {
       this.svg = null;
       this.layerEl = null;
@@ -327,6 +342,9 @@ export class Engine {
    */
   addCanvasPlane(name: string, canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: true })!;
+    this.sprites ??= new SpriteCache(() => {
+      for (const pl of this.planes.values()) if (pl.kind === 'canvas') pl.dirty = true;
+    });
     this.planes.set(name, { kind: 'canvas', canvas, ctx, order: [], dirty: true });
     this.sizeCanvas(canvas);
   }
@@ -337,6 +355,18 @@ export class Engine {
       c.width = w;
       c.height = h;
     }
+  }
+
+  /** Release cached face bitmaps (call from the owner's teardown). */
+  dispose() {
+    this.sprites?.dispose();
+    this.sprites = null;
+  }
+
+  /** Force every canvas plane to repaint on the next render() (benchmarks, context restore). */
+  repaint() {
+    for (const pl of this.planes.values()) pl.dirty = true;
+    this.dirty = true;
   }
 
   /** Change canvas resolution (adaptive quality). */
@@ -393,10 +423,11 @@ export class Engine {
         const shaded = (def.shade ?? 1) > 0;
         const outline = def.outline ?? `M0 0H${def.w}V${def.h}H0Z`;
         let el: SVGGElement | null = null, shadeEl: SVGPathElement | null = null;
-        let pic: Picture | null = null, shadePath: Path2D | null = null;
+        let pic: Picture | null = null, shadePath: Path2D | null = null, sid = 0;
         if (onCanvas) {
           pic = compile(def.art);
           if (shaded) shadePath = new Path2D(outline);
+          if (this.sprites && pic.ops.length >= SPRITE_MIN_OPS) sid = this.sprites.idFor(def.art);
         } else {
           el = document.createElementNS(SVGNS, 'g') as SVGGElement;
           el.setAttribute('class', 'fc');
@@ -418,6 +449,7 @@ export class Engine {
           shadeEl,
           pic,
           shadePath,
+          sid,
           M: [1, 0, 0, 1, 0, 0],
           alpha: 1,
           depth: 0,
@@ -437,9 +469,11 @@ export class Engine {
         }
         const discPic = onCanvas ? compile(w.disc) : null;
         const innerPic = onCanvas && w.inner ? compile(w.inner) : null;
+        const sid = discPic && this.sprites && discPic.ops.length >= SPRITE_MIN_OPS ? this.sprites.idFor(w.disc) : 0;
+        const isid = innerPic && this.sprites && w.inner && innerPic.ops.length >= SPRITE_MIN_OPS ? this.sprites.idFor(w.inner) : 0;
         const discs: DiscRt[] = [1, -1].map((sign) => {
           if (onCanvas) {
-            return { el: null, spinEl: null, pic: discPic, innerPic, M: [1, 0, 0, 1, 0, 0] as Mat, sign, depth: 0, vis: false, lastT: '' };
+            return { el: null, spinEl: null, pic: discPic, innerPic, sid, isid, M: [1, 0, 0, 1, 0, 0] as Mat, sign, depth: 0, vis: false, lastT: '' };
           }
           const el = document.createElementNS(SVGNS, 'g') as SVGGElement;
           el.setAttribute('class', 'wh-disc');
@@ -451,7 +485,7 @@ export class Engine {
             st.innerHTML = w.inner;
             el.appendChild(st);
           }
-          return { el, spinEl, pic: null, innerPic: null, M: [1, 0, 0, 1, 0, 0] as Mat, sign, depth: 0, vis: false, lastT: '' };
+          return { el, spinEl, pic: null, innerPic: null, sid: 0, isid: 0, M: [1, 0, 0, 1, 0, 0] as Mat, sign, depth: 0, vis: false, lastT: '' };
         });
         this.wheels.push({ plane: P, def: w, node: n, hullEl, hullPts: [], discs, depth: 0, vis: false, lastD: '', lastO: -1 });
       }
@@ -723,13 +757,21 @@ export class Engine {
     const ctx = pl.ctx!;
     const k = this.dpr;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, pl.canvas!.width, pl.canvas!.height);
+    const view = { w: pl.canvas!.width, h: pl.canvas!.height };
+    ctx.clearRect(0, 0, view.w, view.h);
     const S = (m: Mat): Mat => [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k, m[5] * k];
+    const sprites = this.useSprites ? this.sprites : null;
+    sprites?.begin();
+    // Group alpha on a sprite differs from per-op alpha where ops overlap, so
+    // translucent multi-op art keeps the exact vector path.
+    const pic = (p: Picture, sid: number, M: Mat, alpha: number) => {
+      if (!(sid && sprites && alpha >= 1 && sprites.draw(ctx, p, sid, M, alpha))) drawPicture(ctx, p, M, alpha, view);
+    };
     for (const it of items) {
       if (it.k === 'f') {
         const f = it.f;
         const M = S(f.M);
-        drawPicture(ctx, f.pic!, M, f.alpha);
+        pic(f.pic!, f.sid, M, f.alpha);
         if (f.shadePath && f.lastS > 0) {
           ctx.setTransform(M[0], M[1], M[2], M[3], M[4], M[5]);
           ctx.globalAlpha = f.alpha * f.lastS;
@@ -752,12 +794,14 @@ export class Engine {
         ctx.globalAlpha = 1;
       } else {
         const d = it.d;
-        drawPicture(ctx, d.pic!, S(d.M), it.w.lastO);
+        pic(d.pic!, d.sid, S(d.M), it.w.lastO);
         const M0 = (d as DiscRt & { M0?: Mat }).M0;
-        if (d.innerPic && M0) drawPicture(ctx, d.innerPic, S(M0), it.w.lastO);
+        if (d.innerPic && M0) pic(d.innerPic, d.isid, S(M0), it.w.lastO);
       }
     }
+    ctx.globalAlpha = 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    sprites?.trim();
   }
 }
 
