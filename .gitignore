@@ -18,3 +18,7 @@ exports/
 .superpowers/
 .vercel
 .playwright-mcp/
+
+# Separate repos / local duplicates (backed up elsewhere)
+/Architect Design Templates/
+/Navair Logistics Client 01/
